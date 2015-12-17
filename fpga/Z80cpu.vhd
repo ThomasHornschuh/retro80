@@ -35,8 +35,10 @@ entity Z80cpu is
         address             : out std_logic_vector(15 downto 0);
         data_in             : in  std_logic_vector(7 downto 0);
         data_out            : out std_logic_vector(7 downto 0);
+        int_ack				 : out std_logic; -- TH interrupt acknowledge - active high
 
         -- interrupts
+		  
         interrupt           : in  std_logic;
         nmi                 : in  std_logic
          );
@@ -65,6 +67,8 @@ begin
     req_io    <= (not IORQ_n) and (M1_n); -- IORQ is active during M1 when handling interrupts (it's well documented, but I found out the hard way...)
     req_read  <= (not RD_n) and (RFSH_n);
     req_write <= (not WR_n);
+	 
+	 int_ack   <= (not IORQ_n) and (not M1_n); -- TH
 
     cpu : entity work.T80se
     generic map (

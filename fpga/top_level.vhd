@@ -76,6 +76,8 @@ architecture Behavioral of top_level is
     - 10000 -- reduce the value the simulator uses
     -- pragma translate_on
     ;
+	 
+	 constant int_vector : std_logic_vector(7 downto 0) := X"00"; -- interrupt vector number for Z80 IM2
 
     -- signals for clocking
     signal clk_feedback         : std_logic;  -- PLL clock feedback
@@ -104,6 +106,7 @@ architecture Behavioral of top_level is
     signal req_io               : std_logic;
     signal req_read             : std_logic;
     signal req_write            : std_logic;
+	 signal int_ack				  : std_logic;  -- TH 
     signal virtual_address      : std_logic_vector(15 downto 0);
     signal physical_address     : std_logic_vector(25 downto 0);
     signal mem_wait             : std_logic;
@@ -142,6 +145,7 @@ architecture Behavioral of top_level is
     signal mmu_data_out         : std_logic_vector(7 downto 0);
     signal clkscale_out         : std_logic_vector(7 downto 0);
     signal gpio_data_out        : std_logic_vector(7 downto 0);
+	 signal int_vector_out       : std_logic_vector(7 downto 0) := int_vector; -- TH
 
     -- GPIO
     signal gpio_input           : std_logic_vector(7 downto 0);
@@ -216,6 +220,7 @@ begin
                  req_read => req_read,
                  req_write => req_write,
                  mem_wait => cpu_wait,
+					  int_ack => int_ack, 
                  address => virtual_address,
                  data_in => cpu_data_in,
                  data_out => cpu_data_out
@@ -243,7 +248,7 @@ begin
 
     -- This process determines which IO or memory device the CPU is addressing
     -- and asserts the appropriate chip select signals.
-    cs_process: process(req_mem, req_io, physical_address, virtual_address, uartA_cs, uartB_cs, swap_uart01)
+    cs_process: process(req_mem, req_io,int_ack, physical_address, virtual_address, uartA_cs, uartB_cs, swap_uart01)
     begin
         -- memory chip selects: default to unselected
         rom_cs   <= '0';
@@ -329,6 +334,7 @@ begin
        spimaster1_data_out when spimaster1_cs='1' else
        clkscale_out        when   clkscale_cs='1' else
        gpio_data_out       when       gpio_cs='1' else
+		 int_vector_out      when       int_ack='1' else  -- TH: Very simple "interrupt controller"
        rom_data_out; -- default case
 
    dram: entity work.DRAM

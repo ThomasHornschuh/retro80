@@ -96,6 +96,8 @@ pdisp:      jp $-$          ; vector computed by GENSYS.COM; calls dispatcher (s
 xdos:       jp $-$          ; vector computed by GENSYS.COM; make XDOS function call
 sysdat:     dw $-$          ; value computed by GENSYS.COM; address of system data page
 
+		
+
 ; disk parameter header (16 bytes for each drive), see page 6-28 in CP/M 2.2 operating system manual
 dpbase:
             ; disk 0 (A)
@@ -119,8 +121,19 @@ dpbase:
             dw chk01        ; CSV (unique scratch pad used to check for changed disks)
             dw alv01        ; ALV (unique scratch pad for allocation information)
             ; end of disk 1
+			
+			 ; disk 2 (C)
+            dw 0            ; sector translation table (0 = no translation)
+            dw 0            ; must be 0
+            dw 0            ; must be 0
+            dw 0            ; must be 0
+            dw dirbf        ; DIRBUF (address of shared 128 byte scratch pad area)
+            dw dpblk        ; DPB (disk parameter block)
+            dw chk02        ; CSV (unique scratch pad used to check for changed disks)
+            dw alv02        ; ALV (unique scratch pad for allocation information)
+            ; end of disk 2
 
-ndisks      equ 2           ; number of disks we defined
+ndisks      equ 3           ; number of disks we defined
 nconsoles   equ 2           ; number of consoles we support
 
 ; disk parameter block (can be shared by all disks with same configuration)
@@ -571,11 +584,22 @@ systeminit: ; initialise system -- info in C, DE, HL.
             ; initmsg can now be recycled as the sysvectors buffer
 
             ; put jump instruction at interrupt vector
-            ld a, 0xc3 ; jump instruction
-            ld (0x38), a
-            ld hl, interrupt_handler
-            ld (0x39), hl
-
+            ;ld a, 0xc3 ; jump instruction
+            ;ld (0x38), a
+            ;ld hl, interrupt_handler
+            ;ld (0x39), hl
+			
+			; TH: Prepare Interrupt mode 2 handler
+			
+			ld hl, lastpage  
+			ld l, 0   ; HL will now contain int vector table base
+			ld bc, interrupt_handler
+			ld (hl), c
+			inc hl
+			ld (hl), b	
+			ld a,h
+			ld i,a  ; Load Z80 Interrupt table register 
+			
             ; set up timer hardware to downcount at 50Hz
             ld a, TIMCMD_SEL_DOWNRESET
             out (TIMER_COMMAND), a
@@ -611,8 +635,10 @@ systeminit: ; initialise system -- info in C, DE, HL.
             or  0x0c
             out (UART1_STATUS), a
 
-            ; tell CPU to use interrupt mode 1 (single vector at 0x0038)
-            im 1
+            ; tell CPU to use interrupt mode 2 (Z80 interrupt vector table )
+			
+			
+            im 2
             ; note that we don't call ei ourselves, since MP/M-II does this once we return
 
             ; now copy system vectors etc into our buffer, then copy them to the other banks
@@ -771,7 +797,7 @@ idle:       halt
 ; this string must be AT LEAST 64 bytes since we use it as a copy buffer inside systeminit, and
 ; then used again as the stack during interrupts
 sysvectors:
-initmsg:    db 13, 10, "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20151213])", 0 ; MP/M print a CRLF for us
+initmsg:    db 13, 10, "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20151216])", 0 ; MP/M print a CRLF for us
             ds (VECTOR_LENGTH - ($ - sysvectors))
 ;            ds 8 ; pad to correct length
             .assert ($-sysvectors >= VECTOR_LENGTH) ; safety check
@@ -851,8 +877,18 @@ curbank:    db 0
 dirbf:      ds 128           ; directory scratch area
 alv00:      ds 64            ; allocation vector for disk 0, must be (DSM/8)+1 bytes
 alv01:      ds 64            ; allocation vector for disk 1, must be (DSM/8)+1 bytes
+alv02:      ds 64            ; allocation vector for disk 2, must be (DSM/8)+1 bytes
 chk00:      ds 0             ; check vector for disk 0 (must be CKS bytes long)
 chk01:      ds 0             ; check vector for disk 1 (must be CKS bytes long)
+chk02:      ds 0             ; check vector for disk 1 (must be CKS bytes long)
+
+                             ; space for interrupt vector table
+
+	        ds 256           ; "waste" space to make sure that final code size will above a page boundary
+			
+lastpage:                    ; Dummy label marking end of BIOS - upper 8 Bits will be the last 256 Byte page 			
+			
+	
 
 ; zmac will complain about a missing "end label" statement unless you add one. If the (non-optional)
 ; start vector is to anywhere other than the first byte, the linker adds a jump instruction which
