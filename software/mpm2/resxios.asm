@@ -258,9 +258,9 @@ uart1read:  in a, (UART1_DATA)
             jr input_fixup
 
 input_fixup: ; fix up data read from UARTs in A; for now we just replace backspace with Ctrl-H
-            cp 0x7f ; backspace?
-            ret nz
-            ld a, 8 ; ctrl-h
+            ;cp 0x7f ; backspace?
+            ;ret nz
+            ;ld a, 8 ; ctrl-h
             ret
 
 ; ---[ UART write ]---------------------------------
@@ -797,7 +797,7 @@ idle:       halt
 ; this string must be AT LEAST 64 bytes since we use it as a copy buffer inside systeminit, and
 ; then used again as the stack during interrupts
 sysvectors:
-initmsg:    db 13, 10, "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20151216])", 0 ; MP/M print a CRLF for us
+initmsg:    db 13, 10, "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20151217])", 0 ; MP/M print a CRLF for us
             ds (VECTOR_LENGTH - ($ - sysvectors))
 ;            ds 8 ; pad to correct length
             .assert ($-sysvectors >= VECTOR_LENGTH) ; safety check
