@@ -56,7 +56,14 @@ entity top_level is
            SDRAM_DQM           : out   std_logic_vector( 1 downto 0);
            SDRAM_ADDR          : out   std_logic_vector (12 downto 0);
            SDRAM_BA            : out   std_logic_vector( 1 downto 0);
-           SDRAM_DQ            : inout std_logic_vector (15 downto 0)
+           SDRAM_DQ            : inout std_logic_vector (15 downto 0);
+			  
+			  -- VGA Output 
+			  O_VSYNC : OUT std_logic;
+			  O_HSYNC : OUT std_logic;
+			  O_VIDEO_B : OUT std_logic_vector(3 downto 0);
+			  O_VIDEO_G : OUT std_logic_vector(3 downto 0);
+			  O_VIDEO_R : OUT std_logic_vector(3 downto 0)
        );
 end top_level;
 
@@ -80,6 +87,8 @@ architecture Behavioral of top_level is
 	 constant int_vector : std_logic_vector(7 downto 0) := X"00"; -- interrupt vector number for Z80 IM2
 
     -- signals for clocking
+	 signal clk32Mhz : std_logic; -- Buffered Osc. Clock
+	 
     signal clk_feedback         : std_logic;  -- PLL clock feedback
     signal clk_unbuffered       : std_logic;  -- unbuffered system clock
     signal clk                  : std_logic;  -- buffered system clock (all logic should be clocked by this)
@@ -130,6 +139,7 @@ architecture Behavioral of top_level is
     signal spimaster1_cs        : std_logic;
     signal clkscale_cs          : std_logic;
     signal gpio_cs              : std_logic;
+	 signal vram_cs				  : std_logic; -- TH 
 
     -- data bus
     signal cpu_data_in          : std_logic_vector(7 downto 0);
@@ -146,6 +156,8 @@ architecture Behavioral of top_level is
     signal clkscale_out         : std_logic_vector(7 downto 0);
     signal gpio_data_out        : std_logic_vector(7 downto 0);
 	 signal int_vector_out       : std_logic_vector(7 downto 0) := int_vector; -- TH
+	 signal vram_data_out		  : std_logic_vector(7 downto 0); 
+	 
 
     -- GPIO
     signal gpio_input           : std_logic_vector(7 downto 0);
@@ -158,6 +170,20 @@ architecture Behavioral of top_level is
     signal uart1_interrupt      : std_logic;
 
 begin
+
+
+-- Clock Buffer
+
+ -- Input buffering
+  --------------------------------------
+  clkin1_buf : IBUFG
+  port map
+   (O => clk32Mhz,
+    I => sysclk_32m);
+
+
+
+
     -- Hold CPU reset high for 8 clock cycles on startup,
     -- and when the user presses their reset button.
     process(clk)
@@ -205,6 +231,26 @@ begin
 
     -- Interrupt signal for the CPU
     cpu_interrupt_in <= (timer_interrupt or uart0_interrupt or uart1_interrupt);
+	 
+	 
+	 display : entity work.vgatop
+	 PORT MAP(
+		O_VSYNC => O_VSYNC,
+		O_HSYNC => O_HSYNC,
+		O_VIDEO_B => O_VIDEO_B,
+		O_VIDEO_G =>O_VIDEO_G ,
+		O_VIDEO_R =>O_VIDEO_R ,
+		clk32Mhz => clk32Mhz,
+		DBOut => vram_data_out,
+		DBIn => cpu_data_out,
+		AdrBus => physical_address(11 downto 0),
+		ENA => vram_cs,
+		WREN => req_write,
+		clkA => clk ,
+		I_RESET => reset_button
+	);
+	 
+	 
 
     -- Z80 CPU core
     cpu: entity work.Z80cpu
@@ -271,6 +317,7 @@ begin
         -- 0x1 000 000 - 0x1 FFF FFF  16MB DRAM (uncached)  (mapped to 8MB DRAM twice)
         -- 0x2 000 000 - 0x2 000 FFF   4KB monitor ROM      (FPGA block RAM)
         -- 0x2 001 000 - 0x2 001 FFF   4KB SRAM             (FPGA block RAM)
+		  -- 0x2 002 000 - 0x3 002 FFF   4KB Video RAM        (FPGA block RAM)
         -- 0x2 002 000 - 0x3 FFF FFF  unused space for future expansion
         if physical_address(25) = '0' then
             -- bottom 32MB: DRAM handles this
@@ -280,6 +327,7 @@ begin
             case physical_address(24 downto 12) is
                 when "0000000000000" =>  rom_cs <= req_mem;
                 when "0000000000001" => sram_cs <= req_mem;
+					 when "0000000000010" => vram_cs <= req_mem;
                 when others => -- undecoded memory space
             end case;
         end if;
@@ -326,6 +374,7 @@ begin
        rom_data_out        when        rom_cs='1' else
        dram_data_out       when       dram_cs='1' else
        sram_data_out       when       sram_cs='1' else
+		 vram_data_out       when       vram_cs='1' else -- TH
        uart0_data_out      when      uart0_cs='1' else
        uart1_data_out      when      uart1_cs='1' else
        timer_data_out      when      timer_cs='1' else
@@ -333,7 +382,7 @@ begin
        spimaster0_data_out when spimaster0_cs='1' else
        spimaster1_data_out when spimaster1_cs='1' else
        clkscale_out        when   clkscale_cs='1' else
-       gpio_data_out       when       gpio_cs='1' else
+       gpio_data_out       when       gpio_cs='1' else		 
 		 int_vector_out      when       int_ack='1' else  -- TH: Very simple "interrupt controller"
        rom_data_out; -- default case
 
@@ -545,7 +594,7 @@ begin
                RESET_ON_LOSS_OF_LOCK => FALSE        -- Must be set to FALSE
            ) 
    port map(
-               CLKIN    => sysclk_32m,   -- 1-bit input: Clock input
+               CLKIN    => clk32Mhz,   -- 1-bit input: Clock input
                CLKFBOUT => clk_feedback, -- 1-bit output: PLL_BASE feedback output
                CLKFBIN  => clk_feedback, -- 1-bit input: Feedback clock input
                                          -- CLKOUT0 - CLKOUT5: 1-bit (each) output: Clock outputs
