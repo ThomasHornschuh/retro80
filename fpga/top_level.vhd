@@ -317,8 +317,8 @@ begin
         -- 0x1 000 000 - 0x1 FFF FFF  16MB DRAM (uncached)  (mapped to 8MB DRAM twice)
         -- 0x2 000 000 - 0x2 000 FFF   4KB monitor ROM      (FPGA block RAM)
         -- 0x2 001 000 - 0x2 001 FFF   4KB SRAM             (FPGA block RAM)
-		  -- 0x2 002 000 - 0x3 002 FFF   4KB Video RAM        (FPGA block RAM)
-        -- 0x2 002 000 - 0x3 FFF FFF  unused space for future expansion
+		  -- 0x2 002 000 - 0x2 002 FFF   4KB Video RAM        (FPGA block RAM)
+        -- 0x2 003 000 - 0x3 FFF FFF  unused space for future expansion
         if physical_address(25) = '0' then
             -- bottom 32MB: DRAM handles this
             dram_cs <= req_mem;
