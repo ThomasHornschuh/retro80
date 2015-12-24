@@ -139,7 +139,8 @@ architecture Behavioral of top_level is
     signal spimaster1_cs        : std_logic;
     signal clkscale_cs          : std_logic;
     signal gpio_cs              : std_logic;
-	 signal vram_cs				  : std_logic; -- TH 
+	 signal vram_cs				  : std_logic; -- TH: VGA VRAM select  
+	 signal vga_cs					  : std_logic; -- TH: VGA IO Register Select
 
     -- data bus
     signal cpu_data_in          : std_logic_vector(7 downto 0);
@@ -156,7 +157,7 @@ architecture Behavioral of top_level is
     signal clkscale_out         : std_logic_vector(7 downto 0);
     signal gpio_data_out        : std_logic_vector(7 downto 0);
 	 signal int_vector_out       : std_logic_vector(7 downto 0) := int_vector; -- TH
-	 signal vram_data_out		  : std_logic_vector(7 downto 0); 
+	 signal vga_data_out		  	  : std_logic_vector(7 downto 0); -- TH
 	 
 
     -- GPIO
@@ -241,12 +242,13 @@ begin
 		O_VIDEO_G =>O_VIDEO_G ,
 		O_VIDEO_R =>O_VIDEO_R ,
 		clk32Mhz => clk32Mhz,
-		DBOut => vram_data_out,
+		DBOut => vga_data_out,
 		DBIn => cpu_data_out,
 		AdrBus => physical_address(11 downto 0),
 		ENA => vram_cs,
 		WREN => req_write,
 		clkA => clk ,
+		IO_cs => vga_cs,
 		I_RESET => reset_button
 	);
 	 
@@ -340,6 +342,7 @@ begin
             when "00100" => gpio_cs             <= req_io;  -- 20 ... 27
             when "00101" => uartB_cs            <= req_io;  -- 28 ... 2F
             when "00110" => spimaster1_cs       <= req_io;  -- 30 ... 37
+				when "00111" => vga_cs					<= req_io;  -- 38 ... 3F
                                                             -- unused ports
             when "11110" => clkscale_cs         <= req_io;  -- F0 ... F7
             when "11111" => mmu_cs              <= req_io;  -- F8 ... FF
@@ -374,7 +377,7 @@ begin
        rom_data_out        when        rom_cs='1' else
        dram_data_out       when       dram_cs='1' else
        sram_data_out       when       sram_cs='1' else
-		 vram_data_out       when       vram_cs='1' else -- TH
+		 vga_data_out        when       vram_cs='1' or vga_cs='1' else -- TH
        uart0_data_out      when      uart0_cs='1' else
        uart1_data_out      when      uart1_cs='1' else
        timer_data_out      when      timer_cs='1' else

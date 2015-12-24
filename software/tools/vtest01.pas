@@ -2,13 +2,12 @@
 
 const mmu_page_reg = $f8;
       mmu_map_h = $fc;
-      mmu_map_mh = $fd;
-      mmu_map_ml = $fe;
-      mmu_map_l  = $ff;
-
-      mmu_data = $fa;
+      mmu_map_l  = $fd;
 
       Test : string[128] = 'The Quick brown fox jumps over the lazy dog';
+
+
+type  str128 = string[128];
 
 var i : integer;
     video : array [0..4095] of byte absolute $3000;
@@ -16,8 +15,28 @@ var i : integer;
     buffer : array [0..255] of byte;
 
 
+    procedure writestring(x,y:integer;var s:str128);
+
+    var adr,i : integer;
+
+    begin
+      adr:= y*80 + x;
+
+      i:=1;
+      while i<=length(s) do begin
+        if (adr>=0) and (adr<=4095) then begin
+          video[adr]:=byte(s[i]);
+        end;
+        i:=succ(i);
+        adr:=succ(adr);
+      end;
+
+    end;
 
 begin
+
+
+
 
   (* Test Pattern in "normal" Memory *)
 
@@ -31,20 +50,18 @@ begin
   port[mmu_page_reg]:=$03;
 
   svh:=port[mmu_map_h];
-  svl:=port[mmu_map_mh];
+  svl:=port[mmu_map_l];
 
 
   port[mmu_map_h]:=$20;
-  port[mmu_map_mh]:=$02;
-  (* port[mmu_map_ml]:=$00;
-  port[mmu_map_l]:=$00; *)
+  port[mmu_map_l]:=$02;
 
   for I:=0 to 4095 do video[i]:=32; (* blank *)
-  for I:=1 to length(Test) do video[i-1]:=byte(Test[i]);
-
+  writestring(0,0,Test);
+  writestring(0,39,Test);
 
   port[mmu_map_h]:=svh;
-  port[mmu_map_mh]:=svl;
+  port[mmu_map_l]:=svl;
 
 
   inline($fb); (* ei *)
@@ -55,4 +72,3 @@ begin
   for i:=0 to 255 do write(chr(video[i]));
   writeln;
 end.
-
