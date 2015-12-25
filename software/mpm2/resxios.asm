@@ -193,7 +193,8 @@ conin:      ; UART input
 conout:     ; UART output
             call ptbljmp
             dw uart0out
-            dw uart1out
+            dw vgaout
+			
 
 ; ---[ UART status ]--------------------------------
 uart0pollin:
@@ -793,6 +794,20 @@ intdone:    ; tidy up from interrupts, return via the dispatcher
 idle:       halt
             ret
 
+; !! Bug in zasm: include is not allowed to be in column 1
+  include   vgabasic.asm
+
+nop
+  
+vgaout: ret ; to be implemented					
+			
+
+
+		
+
+		
+			
+
 ;---------------------------------------------------------------------------------------------------------------
 ; this string must be AT LEAST 64 bytes since we use it as a copy buffer inside systeminit, and
 ; then used again as the stack during interrupts
@@ -872,6 +887,9 @@ tickcount:  db tickspersec  ; count down ticks to measure one second
 ticking:    db 0    ; bool: system timer ticking?
 preempted:  db 0    ; bool: pre-empted?
 curbank:    db 0
+
+
+
 
 ; scratch RAM used by BDOS/MPMLDR
 dirbf:      ds 128           ; directory scratch area
