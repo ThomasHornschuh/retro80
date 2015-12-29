@@ -193,7 +193,7 @@ conin:      ; UART input
 conout:     ; UART output
             call ptbljmp
             dw uart0out
-            dw vgaout
+            dw vconout 
 			
 
 ; ---[ UART status ]--------------------------------
@@ -580,8 +580,19 @@ numdevices  equ ($-tblstart)/2 ; compute table size used in range check above
 ; ---[ initialisation ]-----------------------------
 VECTOR_LENGTH equ 64
 systeminit: ; initialise system -- info in C, DE, HL.
+
+			; TH: Init VGA Library 
+			ld a, 04H
+			ld (mapPage),a
+			call initvga
+			
             ld hl, initmsg
             call strout
+			; Write init msg also to console 1 
+			ld hl, initmsg
+			ld d, 1
+			call cstrout
+			
             ; initmsg can now be recycled as the sysvectors buffer
 
             ; put jump instruction at interrupt vector
@@ -797,22 +808,14 @@ idle:       halt
 ; !! Bug in zasm: include is not allowed to be in column 1
   include   vgabasic.asm
 
-nop
-  
-vgaout: ret ; to be implemented					
-			
-
-
-		
-
-		
-			
-
+  vconout: ld ix,scrpb0
+		   jp vgaconout	
+				
 ;---------------------------------------------------------------------------------------------------------------
 ; this string must be AT LEAST 64 bytes since we use it as a copy buffer inside systeminit, and
 ; then used again as the stack during interrupts
 sysvectors:
-initmsg:    db 13, 10, "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20151217])", 0 ; MP/M print a CRLF for us
+initmsg:    db 13, 10, "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20151229])", 0 ; MP/M print a CRLF for us
             ds (VECTOR_LENGTH - ($ - sysvectors))
 ;            ds 8 ; pad to correct length
             .assert ($-sysvectors >= VECTOR_LENGTH) ; safety check
@@ -831,6 +834,20 @@ strout:     ; print string pointed to by HL
             inc hl
             jr strout
 
+cstrout:   ; like strout but using XIOS conout, D points to console number
+		    ld a, (hl)
+            cp 0
+            ret z
+            ld c, a
+			push de
+			push hl
+            call conout
+			pop hl 
+			pop de 
+            inc hl
+            jr cstrout	
+			
+			
 ; print the byte in A as two hex nibbles
 outcharhex:
             push bc

@@ -212,27 +212,24 @@ begin
     signal ram_tmp : integer range 3200 downto 0;  --12 bits
     signal rom_tmp : integer range 3070 downto 0;
 	 
-	 
-	 --- Text Buffer base address counter -- avoid using a multiplier
---- tbca will always point to address of first char of current screen line
-
- 
-
-	 
 
   begin
   
+    --- Text Buffer base address counter -- avoid using a multiplier
+    --- tbca will always point to address of first char of current screen line
      process(reset, clk25MHz)
      begin
        if reset = '1' then
 	     tbca <= 0;
 	    elsif rising_edge(clk25MHz) then
-         if scry_rs='1' then -- start of new 
-		     tbca <= 0;
-		   elsif scry_ce ='1' then -- start of new text line  
-		     tbca <= tbca + 80;	
-		   end if;  
-       end if;	 		
+        if scry_ce ='1' then 
+			  if scry_rs='1' then -- start of new 
+				 tbca <= 0;
+			  else -- start of new text line  
+				 tbca <= tbca + 80;
+			  end if;		
+		   end if;   
+        end if;	 		
     end process;
   
   

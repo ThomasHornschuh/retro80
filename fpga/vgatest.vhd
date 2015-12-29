@@ -53,6 +53,7 @@ ARCHITECTURE behavior OF vgatest IS
          ENA : IN  std_logic;
          WREN : IN  std_logic;
          clkA : IN  std_logic;
+			IO_cs : in STD_LOGIC; 
          I_RESET : IN  std_logic
         );
     END COMPONENT;
@@ -95,7 +96,8 @@ BEGIN
           ENA => ENA,
           WREN => WREN,
           clkA => clkA,
-          I_RESET => I_RESET
+          I_RESET => I_RESET,
+			 IO_cs => '0'
         );
 
    -- Clock process definitions
