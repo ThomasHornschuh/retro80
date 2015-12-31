@@ -3,6 +3,9 @@
 
 ; VGA Video output handling
 
+
+; 
+
 ; IO Registers
 
 CursorXReg  equ 38H ; 1..80 !!
@@ -18,8 +21,15 @@ vMMUFrameL  equ 0FDH
 PhysScreenPage equ 2002H
 
 columns    equ 80
-lines      equ 40   
+physlines  equ 40
+
+ if vgastatusline
+  lines      equ physlines-1   
+ else
+  lines equ physlines
+ endif   
 screensize equ columns*lines
+physsize equ columns*physlines
 
 
 defscrpb macro n
@@ -73,7 +83,7 @@ getmapva:   ; Calculate virtual address of mapPage
             ret
 
 
-
+		
 writechar:  ; Reg C contains char -- IX contains scrpb
             ; The critical part of the code (where the video buffer is mapped into virtual address space) does not use the stack
             ; and runs with interrupts disabled. This will avoid any interferences between SP and video mapping
@@ -96,26 +106,71 @@ writechar:  ; Reg C contains char -- IX contains scrpb
             ret             
             
 clrscr:     ; Clears the screen (fill with blank), IX ontains scrpb. Again code runs with interrupts disabled and without stack usage
+			; C contains flag c=0: Clear only screen without status line, c=1: clear including status lines 
+			; Will not change interrupt enable - so make sure that no MMU changes are done while this code is running 
             call getmapva
             ld h,a
             ld l,0
-            ld c, ' '
-            di
-            mapVPage
+            ld a,c ; Check clr size flag 
+			or a ; Set Flags 
+			jr nz, clrall
+			ld de, screensize
+			jr clrs00
+clrall:		ld de, physsize
+clrs00:					
+			ld c, ' '
+           
+            mapVPage			
 clrs01:     ld (hl),c
             inc hl
-            ld a,low(screensize)
-            cp l
+            ld a,l 
+            cp e ; low byte of screen size 
             jr nz, clrs01
             ld a,h
             and 0fh
-            cp high(screensize)
+            cp d ; high byte of screen size 
             jr nz, clrs01
             unmapVPage
-            ei
             ret
 
 
+writestrxy: ; Write a string at position x,y  HL : ptr to null terminated string, B: Y C: x, IX: ptr to scrpb	
+		    ; Does not scroll, does not update the HW cursor  
+			; Will not change interrupt enable - so make sure that no MMU changes are done while this code is running 
+			push hl; save ptr 
+			ld a,b
+			push bc
+			call mult80
+			pop bc
+			ld b,0 ; clear high order byte
+			add hl,bc ; HL = B*80 + C 
+			call getmapva
+			ld (scratch),a ; Save ...
+			or h ; Merge map Page into H
+			ld d,a ; Move result to DE
+			ld e,l 
+			
+			pop hl 
+			; Now HL contains ptr to string and DE contains ptr to screen buffer
+			mapVPage 
+wxy0:		ld a, (hl)
+            cp 0
+            jr z, wxy1 ; finish 
+            ldi  ; (DE)<-(HL), increment ptrs 
+			; The following code ensures that DE is not leaving the 4K Page boundary
+			ld a,d
+			and 0FH 
+			ld d,a 	
+			ld a,(scratch)
+			or d 
+			ld d,a 
+            jr wxy0 
+wxy1:		unmapVPage		
+			ret 	
+			
+			
+			
+			
 scroll:     ; Scrolls screen 1 line (append empty line at end ), ix points to scrpb
             call getmapva
             ld d,a
@@ -233,6 +288,7 @@ initvga:   ; Initalize lib and Hardware
         ld ix,scrpb0
         ld hl,PhysScreenPage        
         call initscrpb
+		ld c,1 ; clear including status line 
         call clrscr
         ld a,1
         out (cursorXReg),a 
@@ -253,3 +309,4 @@ defscrpb 0  ; Allocate one parameter block for physical screen buffer
 mapPage:    db 0FH ; Virtual Page to map screen buffer to - can be changed 
 FrameSaveL: ds 1  ; Locations to save orginal mapping of mapPage 
 FrameSaveH: ds 1  ; 
+scratch: ds 2 ; Scratch area 

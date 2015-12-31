@@ -87,6 +87,7 @@ flag_uart1out  equ 9
             ; db 0, 0, 0      ; uncomment this if mp/m should poll devices when idling
             jp idle         ; custom idle procedure (optional)
 
+			
 ; everything AFTER the "commonbase" label is located in "common memory".
 ; everything BEFORE this is in banked memory
 commonbase: jp wboot
@@ -588,10 +589,12 @@ systeminit: ; initialise system -- info in C, DE, HL.
 			
             ld hl, initmsg
             call strout
-			; Write init msg also to console 1 
-			ld hl, initmsg
-			ld d, 1
-			call cstrout
+			
+			; Write init msg also to  status line 
+			ld bc, (39 shl 8) or 0H  ; Line 40, Column 1
+			ld ix,scrpb0 
+			ld hl, initmsg1
+			call writestrxy
 			
             ; initmsg can now be recycled as the sysvectors buffer
 
@@ -805,6 +808,8 @@ intdone:    ; tidy up from interrupts, return via the dispatcher
 idle:       halt
             ret
 
+   vgastatusline equ 1 ; Enable line 40 as status line - not acccesiable to normal console out 			
+			
 ; !! Bug in zasm: include is not allowed to be in column 1
   include   vgabasic.asm
 
@@ -815,7 +820,8 @@ idle:       halt
 ; this string must be AT LEAST 64 bytes since we use it as a copy buffer inside systeminit, and
 ; then used again as the stack during interrupts
 sysvectors:
-initmsg:    db 13, 10, "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20151229])", 0 ; MP/M print a CRLF for us
+initmsg:    db 13, 10
+initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20151231])", 0 ; MP/M print a CRLF for us
             ds (VECTOR_LENGTH - ($ - sysvectors))
 ;            ds 8 ; pad to correct length
             .assert ($-sysvectors >= VECTOR_LENGTH) ; safety check
