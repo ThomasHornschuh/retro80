@@ -153,6 +153,8 @@ systeminit: ; initialise system -- info in C, DE, HL.
             ; tell CPU to use interrupt mode 2 (Z80 interrupt vector table )			
             im 2			
             ; note that we don't call ei ourselves, since MP/M-II does this once we return		
+   if Q_INPUT			
 			call c0instart ; Start input process 
+   endif 			
 			jp sysinitc ; jump to part in commom memory 
 		

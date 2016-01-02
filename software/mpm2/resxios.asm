@@ -8,6 +8,9 @@
 .z80        ; tell zmac to prefer z80 mnemonics
 startlabel: ; important that this assembles to offset 0 (or the linker will add a jump)
 
+Q_INPUT 	  equ 1 ; Conditional define 
+
+
 UART0_STATUS   equ 0x00   ; [7: RX READY] [6: TX BUSY] [6 unused bits]
 UART0_DATA     equ 0x01
 
@@ -148,15 +151,25 @@ tbljmp:     add a  ; *2
 
 const:      ; read UART input ready status
             call ptbljmp
+		if Q_INPUT
             dw const0q
-			;dw uart0pollin
-            dw uart1pollin
+			dw const1q 
+		else
+			dw uart0pollin
+			dw uart1pollin
+		endif 
+           
 
 conin:      ; UART input
             call ptbljmp
-			;dw uart0in
+		if Q_INPUT	
             dw conin0q ; Queued input 
-            dw uart1in
+			dw conin1q
+		else
+            dw uart0in
+			dw uart1in
+		endif		
+            
 
 conout:     ; UART output
             call ptbljmp
@@ -165,6 +178,7 @@ conout:     ; UART output
 			
 
 ; ---[ UART status ]--------------------------------
+; Not really needed in the future ....
 uart0pollin:
             in a, (UART0_STATUS)
             bit 7, a
@@ -196,6 +210,7 @@ ready:      ld a, 0xff
 
 ; ---[ UART read ]----------------------------------
 
+if Q_INPUT = 0 
 uart0in:    call uart0pollin
             or a ; test result
             jr nz, uart0read
@@ -210,6 +225,7 @@ uart0in:    call uart0pollin
             jr uart0in
 uart0read:  in a, (UART0_DATA)
             jr input_fixup
+endif 			
 
 uart1in:    call uart1pollin
             or a ; test result
@@ -566,10 +582,12 @@ interrupt_handler:
             ; timer has generated an interrupt, ack it.
             xor a  ; cmd 0 = interrupt acknowledge
             out (TIMER_COMMAND), a
-
+		
             ; decrement our tick counter 
-            ld hl, tickcount
+inth1:      ld hl, tickcount
             dec (hl)
+			
+						
             jr nz, not1second
 
             ; 1 second has passed
@@ -676,8 +694,9 @@ idle:       halt
 
 ; New queued console input mechanism
 
+if Q_INPUT
   include qinput.asm
-
+endif 
     
 				
 				
@@ -686,7 +705,7 @@ idle:       halt
 ; then used again as the stack during interrupts
 sysvectors:
 initmsg:    db 13, 10
-initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20151231])", 0 ; MP/M print a CRLF for us
+initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20160101])", 0 ; MP/M print a CRLF for us
             ds (VECTOR_LENGTH - ($ - sysvectors))
 ;            ds 8 ; pad to correct length
             .assert ($-sysvectors >= VECTOR_LENGTH) ; safety check
