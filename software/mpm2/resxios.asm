@@ -8,7 +8,7 @@
 .z80        ; tell zmac to prefer z80 mnemonics
 startlabel: ; important that this assembles to offset 0 (or the linker will add a jump)
 
-Q_INPUT 	  equ 1 ; Conditional define 
+Q_INPUT       equ 1 ; Conditional define 
 
 
 UART0_STATUS   equ 0x00   ; [7: RX READY] [6: TX BUSY] [6 unused bits]
@@ -90,8 +90,8 @@ flag_uart1out  equ 9
             ; db 0, 0, 0      ; uncomment this if mp/m should poll devices when idling
             jp idle         ; custom idle procedure (optional)
 
-			include banked.asm ; Banked parts of the XIOS... 
-			
+            include banked.asm ; Banked parts of the XIOS... 
+            
 ; everything AFTER the "commonbase" label is located in "common memory".
 ; everything BEFORE this is in banked memory
 commonbase: jp wboot
@@ -101,7 +101,7 @@ pdisp:      jp $-$          ; vector computed by GENSYS.COM; calls dispatcher (s
 xdos:       jp $-$          ; vector computed by GENSYS.COM; make XDOS function call
 sysdat:     dw $-$          ; value computed by GENSYS.COM; address of system data page
 
-		
+        
 ndisks      equ 3           ; number of disks we defined
 nconsoles   equ 2           ; number of consoles we support
 
@@ -151,31 +151,31 @@ tbljmp:     add a  ; *2
 
 const:      ; read UART input ready status
             call ptbljmp
-		if Q_INPUT
+        if Q_INPUT
             dw const0q
-			dw const1q 
-		else
-			dw uart0pollin
-			dw uart1pollin
-		endif 
+            dw const1q 
+        else
+            dw uart0pollin
+            dw uart1pollin
+        endif 
            
 
 conin:      ; UART input
             call ptbljmp
-		if Q_INPUT	
+        if Q_INPUT  
             dw conin0q ; Queued input 
-			dw conin1q
-		else
+            dw conin1q
+        else
             dw uart0in
-			dw uart1in
-		endif		
+            dw uart1in
+        endif       
             
 
 conout:     ; UART output
             call ptbljmp
             dw uart0out
             dw vconout 
-			
+            
 
 ; ---[ UART status ]--------------------------------
 ; Not really needed in the future ....
@@ -225,7 +225,7 @@ uart0in:    call uart0pollin
             jr uart0in
 uart0read:  in a, (UART0_DATA)
             jr input_fixup
-endif 			
+endif           
 
 uart1in:    call uart1pollin
             or a ; test result
@@ -527,8 +527,8 @@ numdevices  equ ($-tblstart)/2 ; compute table size used in range check above
 
 
 
-sysinitc:   ; Part of sysinit that must reside in common memory because it does bank switching 		
-			
+sysinitc:   ; Part of sysinit that must reside in common memory because it does bank switching      
+            
             ; now copy system vectors etc into our buffer, then copy them to the other banks
             ld hl, 0
             ld de, sysvectors
@@ -582,12 +582,12 @@ interrupt_handler:
             ; timer has generated an interrupt, ack it.
             xor a  ; cmd 0 = interrupt acknowledge
             out (TIMER_COMMAND), a
-		
+        
             ; decrement our tick counter 
 inth1:      ld hl, tickcount
             dec (hl)
-			
-						
+            
+                        
             jr nz, not1second
 
             ; 1 second has passed
@@ -683,14 +683,14 @@ intdone:    ; tidy up from interrupts, return via the dispatcher
 idle:       halt
             ret
 
-   vgastatusline equ 1 ; Enable line 40 as status line - not acccesiable to normal console out 			
-			
+   vgastatusline equ 1 ; Enable line 40 as status line - not acccesiable to normal console out          
+            
 ; !! Bug in zasm: include is not allowed to be in column 1
   include   vgabasic.asm
 
   vconout: ld ix,scrpb0
-		   jp vgaconout	
-				
+           jp vgaconout 
+                
 
 ; New queued console input mechanism
 
@@ -698,14 +698,14 @@ if Q_INPUT
   include qinput.asm
 endif 
     
-				
-				
+                
+                
 ;---------------------------------------------------------------------------------------------------------------
 ; this string must be AT LEAST 64 bytes since we use it as a copy buffer inside systeminit, and
 ; then used again as the stack during interrupts
 sysvectors:
 initmsg:    db 13, 10
-initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20160101])", 0 ; MP/M print a CRLF for us
+initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20160102])", 0 ; MP/M print a CRLF for us
             ds (VECTOR_LENGTH - ($ - sysvectors))
 ;            ds 8 ; pad to correct length
             .assert ($-sysvectors >= VECTOR_LENGTH) ; safety check
@@ -725,19 +725,19 @@ strout:     ; print string pointed to by HL
             jr strout
 
 cstrout:   ; like strout but using XIOS conout, D points to console number
-		    ld a, (hl)
+            ld a, (hl)
             cp 0
             ret z
             ld c, a
-			push de
-			push hl
+            push de
+            push hl
             call conout
-			pop hl 
-			pop de 
+            pop hl 
+            pop de 
             inc hl
-            jr cstrout	
-			
-			
+            jr cstrout  
+            
+            
 ; print the byte in A as two hex nibbles
 outcharhex:
             push bc
@@ -809,11 +809,11 @@ chk02:      ds 0             ; check vector for disk 1 (must be CKS bytes long)
 
                              ; space for interrupt vector table
 
-	        ds 256           ; "waste" space to make sure that final code size will above a page boundary
-			
-lastpage:                    ; Dummy label marking end of BIOS - upper 8 Bits will be the last 256 Byte page 			
-			
-	
+            ds 256           ; "waste" space to make sure that final code size will above a page boundary
+            
+lastpage:                    ; Dummy label marking end of BIOS - upper 8 Bits will be the last 256 Byte page            
+            
+    
 
 ; zmac will complain about a missing "end label" statement unless you add one. If the (non-optional)
 ; start vector is to anywhere other than the first byte, the linker adds a jump instruction which

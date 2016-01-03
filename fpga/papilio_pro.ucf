@@ -83,7 +83,7 @@ NET serial_tx       LOC="P105" | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;
 NET reset_button    LOC="P85" | IOSTANDARD=LVTTL | PULLDOWN; # Arcade Megawing board
 
 # System console select jumper on IO board
-NET console_select  LOC="P134" | IOSTANDARD=LVTTL | PULLUP; # IO board -- can be optionally pulled to GND through jumper
+#NET console_select  LOC="P134" | IOSTANDARD=LVTTL | PULLUP; # IO board -- can be optionally pulled to GND through jumper
 
 # SPI to SD card socket on IO board
 #NET sdcard_spi_clk  LOC="P116" | IOSTANDARD=LVTTL | SLEW=FAST;
@@ -156,3 +156,9 @@ NET O_VIDEO_R(3)   LOC="P121" | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;         
 
 NET O_VSYNC        LOC="P116" | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;          # C2
 NET O_HSYNC        LOC="P117" | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;          # C3
+
+# Input switches Arcade Megaing
+NET I_SW(0)        LOC="P74"  | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;          # B8
+NET I_SW(2)        LOC="P95"  | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;          # B9
+NET I_SW(1)        LOC="P62"  | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;          # B10
+NET I_SW(3)        LOC="P59"  | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;          # B11

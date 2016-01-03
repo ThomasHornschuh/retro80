@@ -41,6 +41,11 @@ scrpb&n:
             DW 0  ; Physical Page number of video buffer
             DB 0  ; <>0 => spb points to real vga frame buffer - update cursor registers...
 endm
+
+
+ldxy macro reg, x, y 
+  ld reg, (y shl 8) or x 
+endm
             
 ;Offsets into screen parameter block            
 cursX  equ  0
@@ -83,8 +88,20 @@ getmapva:   ; Calculate virtual address of mapPage
             ret
 
 
-		
-writechar:  ; Reg C contains char -- IX contains scrpb
+            
+writecharxy:  ; Write a charater at position x,y. 
+              ; Registers: C = char to output, D=y, E=x, IX=scrpb 
+
+            push de
+            ld a,d
+            call mult80 
+            pop de
+            jr wrch1 ; continue below 
+            
+                
+        
+writechar:  ; Write char at current cursor positon of scrpb 
+            ; Reg C contains char -- IX contains scrpb
             ; The critical part of the code (where the video buffer is mapped into virtual address space) does not use the stack
             ; and runs with interrupts disabled. This will avoid any interferences between SP and video mapping
 
@@ -92,7 +109,7 @@ writechar:  ; Reg C contains char -- IX contains scrpb
             ld a,(ix+cursY)
             call mult80 ; hl = a*80
             ld e,(ix+cursX)
-            ld d,0
+ wrch1:     ld d,0
             add hl,de ; hl is now cursY*80 + cursX
             call getmapva ; get virtual address of screen map 
             or h ; Merge  with high order byte of screen offest
@@ -106,21 +123,21 @@ writechar:  ; Reg C contains char -- IX contains scrpb
             ret             
             
 clrscr:     ; Clears the screen (fill with blank), IX ontains scrpb. Again code runs with interrupts disabled and without stack usage
-			; C contains flag c=0: Clear only screen without status line, c=1: clear including status lines 
-			; Will not change interrupt enable - so make sure that no MMU changes are done while this code is running 
+            ; C contains flag c=0: Clear only screen without status line, c=1: clear including status lines 
+            ; Will not change interrupt enable - so make sure that no MMU changes are done while this code is running 
             call getmapva
             ld h,a
             ld l,0
             ld a,c ; Check clr size flag 
-			or a ; Set Flags 
-			jr nz, clrall
-			ld de, screensize
-			jr clrs00
-clrall:		ld de, physsize
-clrs00:					
-			ld c, ' '
+            or a ; Set Flags 
+            jr nz, clrall
+            ld de, screensize
+            jr clrs00
+clrall:     ld de, physsize
+clrs00:                 
+            ld c, ' '
            
-            mapVPage			
+            mapVPage            
 clrs01:     ld (hl),c
             inc hl
             ld a,l 
@@ -134,43 +151,43 @@ clrs01:     ld (hl),c
             ret
 
 
-writestrxy: ; Write a string at position x,y  HL : ptr to null terminated string, B: Y C: x, IX: ptr to scrpb	
-		    ; Does not scroll, does not update the HW cursor  
-			; Will not change interrupt enable - so make sure that no MMU changes are done while this code is running 
-			push hl; save ptr 
-			ld a,b
-			push bc
-			call mult80
-			pop bc
-			ld b,0 ; clear high order byte
-			add hl,bc ; HL = B*80 + C 
-			call getmapva
-			ld (scratch),a ; Save ...
-			or h ; Merge map Page into H
-			ld d,a ; Move result to DE
-			ld e,l 
-			
-			pop hl 
-			; Now HL contains ptr to string and DE contains ptr to screen buffer
-			mapVPage 
-wxy0:		ld a, (hl)
+writestrxy: ; Write a string at position x,y  HL : ptr to null terminated string, B: Y C: x, IX: ptr to scrpb   
+            ; Does not scroll, does not update the HW cursor  
+            ; Will not change interrupt enable - so make sure that no MMU changes are done while this code is running 
+            push hl; save ptr 
+            ld a,b
+            push bc
+            call mult80
+            pop bc
+            ld b,0 ; clear high order byte
+            add hl,bc ; HL = B*80 + C 
+            call getmapva
+            ld (scratch),a ; Save ...
+            or h ; Merge map Page into H
+            ld d,a ; Move result to DE
+            ld e,l 
+            
+            pop hl 
+            ; Now HL contains ptr to string and DE contains ptr to screen buffer
+            mapVPage 
+wxy0:       ld a, (hl)
             cp 0
             jr z, wxy1 ; finish 
             ldi  ; (DE)<-(HL), increment ptrs 
-			; The following code ensures that DE is not leaving the 4K Page boundary
-			ld a,d
-			and 0FH 
-			ld d,a 	
-			ld a,(scratch)
-			or d 
-			ld d,a 
+            ; The following code ensures that DE is not leaving the 4K Page boundary
+            ld a,d
+            and 0FH 
+            ld d,a  
+            ld a,(scratch)
+            or d 
+            ld d,a 
             jr wxy0 
-wxy1:		unmapVPage		
-			ret 	
-			
-			
-			
-			
+wxy1:       unmapVPage      
+            ret     
+            
+            
+            
+            
 scroll:     ; Scrolls screen 1 line (append empty line at end ), ix points to scrpb
             call getmapva
             ld d,a
@@ -181,12 +198,12 @@ scroll:     ; Scrolls screen 1 line (append empty line at end ), ix points to sc
             di
             mapVPage
             ldir
-			; clear bottom line
-			ex de,hl ; de points to begin of last line -> HL
-			ld b,columns
-scrl1:		ld (hl),' '
-			inc hl
-			djnz scrl1				
+            ; clear bottom line
+            ex de,hl ; de points to begin of last line -> HL
+            ld b,columns
+scrl1:      ld (hl),' '
+            inc hl
+            djnz scrl1              
             unmapVPage
             ei
             ret
@@ -216,48 +233,49 @@ mlp2:   sla l
         
 vgaconout:  ; Basic conout procedure  Reg C contains char -- IX contains scrpb
         ld a,c
-		cp 0dh ; CR ?
-		jr z, vccr
-		cp 0ah ; LF ?
-		jr z, vcolf 
-		cp 08h ; backspace
-		jr z, vcobackspace 
-		; no regognized control chars -> output 
+        cp 0dh ; CR ?
+        jr z, vccr
+        cp 0ah ; LF ?
+        jr z, vcolf 
+        cp 08h ; backspace
+        jr z, vcobackspace      
+        cp 32
+        ret m ; no regognized control chars -> ignore 
         call writechar
-		; advance cursor....
+        ; advance cursor....
         ld a,(ix+cursX)
         inc a
         cp columns
         jr nz, vco1 ; no at last column - just update cursX
         ; else go to first column of next line 
-		xor a 
-		ld (ix+cursX),a
-		jr vcolf 
-		
+        xor a 
+        ld (ix+cursX),a
+        jr vcolf 
+        
 vco1:   ld (ix+cursX),a 
         jr sethwcursor
- 		
-		; process a cr 
+        
+        ; process a cr 
 vccr:   xor a
-		jr vco1 
-		
+        jr vco1 
+        
 vcolf:  ; "Line feed"
         ld a,(ix+cursY) ; process Y
         inc a
         cp lines
         jr nz, vco2
         ; scroll ...
-		call scroll
+        call scroll
         ld a, lines-1 ; set line back to 39  
 vco2:   ld (ix+cursY),a
-		jr sethwcursor
-		
+        jr sethwcursor
+        
 vcobackspace:
-		ld a,(ix+cursX)
-		dec a
-		cp 0
-		ret m ; ignore when <0
-		ld (ix+cursX),a 		
+        ld a,(ix+cursX)
+        dec a
+        cp 0
+        ret m ; ignore when <0
+        ld (ix+cursX),a         
 ;; fall through 
 
 sethwcursor: 
@@ -288,7 +306,7 @@ initvga:   ; Initalize lib and Hardware
         ld ix,scrpb0
         ld hl,PhysScreenPage        
         call initscrpb
-		ld c,1 ; clear including status line 
+        ld c,1 ; clear including status line 
         call clrscr
         ld a,1
         out (cursorXReg),a 

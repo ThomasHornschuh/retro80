@@ -22,7 +22,7 @@ entity top_level is
     Port ( sysclk_32m          : in    std_logic;
            leds                : out   std_logic_vector(4 downto 0);
            reset_button        : in    std_logic;
-           console_select      : in    std_logic;
+          -- console_select      : in    std_logic;
 
            -- UART0 (to FTDI USB chip, no flow control)
            serial_rx           : in    std_logic;
@@ -63,7 +63,10 @@ entity top_level is
 			  O_HSYNC : OUT std_logic;
 			  O_VIDEO_B : OUT std_logic_vector(3 downto 0);
 			  O_VIDEO_G : OUT std_logic_vector(3 downto 0);
-			  O_VIDEO_R : OUT std_logic_vector(3 downto 0)
+			  O_VIDEO_R : OUT std_logic_vector(3 downto 0);
+			  -- Push Button cross 
+			  I_SW : 	  in std_logic_vector(3 downto 0)
+			  
        );
 end top_level;
 
@@ -94,9 +97,9 @@ architecture Behavioral of top_level is
     signal clk                  : std_logic;  -- buffered system clock (all logic should be clocked by this)
 
     -- console latch
-    signal console_select_clk1  : std_logic;
-    signal console_select_sync  : std_logic;
-    signal swap_uart01          : std_logic := '0';
+   -- signal console_select_clk1  : std_logic;
+   -- signal console_select_sync  : std_logic;
+    signal swap_uart01          : std_logic := '1'; -- Changed to constant 1 (TH)
 
     -- system reset signals
     signal power_on_reset       : std_logic_vector(1 downto 0) := (others => '1');
@@ -104,6 +107,10 @@ architecture Behavioral of top_level is
     signal reset_button_clk1    : std_logic;
     signal reset_button_sync    : std_logic; -- reset button signal, synchronised to our clock
     signal reset_request_uart   : std_logic; -- reset request signal from FTDI UART (when you send "!~!~!~" to the UART, this line is asserted)
+
+   -- Input switches
+   signal i_sw_clk1, i_sw_sync  : std_logic_vector(3 downto 0);
+
 
     -- CPU control
     signal coldboot             : std_logic;
@@ -169,6 +176,7 @@ architecture Behavioral of top_level is
     signal timer_interrupt      : std_logic;
     signal uart0_interrupt      : std_logic;
     signal uart1_interrupt      : std_logic;
+	 
 
 begin
 
@@ -194,8 +202,10 @@ begin
             -- signals which feed control logic into our clock domain.
             reset_button_clk1 <= reset_button;
             reset_button_sync <= reset_button_clk1;
-            console_select_clk1 <= console_select;
-            console_select_sync <= console_select_clk1;
+           -- console_select_clk1 <= console_select;
+           -- console_select_sync <= console_select_clk1;
+			  i_sw_clk1 <= i_sw;
+			  i_sw_sync <= i_sw_clk1;
 
             -- reset the system when requested
             if (power_on_reset(0) = '1' or reset_button_sync = '1' or reset_request_uart = '1') then
@@ -210,16 +220,16 @@ begin
             -- During reset, latch the console select jumper. This is used to
             -- optionally swap over the UART roles and move the system console to
             -- the second serial port on the IO board.
-            if system_reset = '1' then
-                swap_uart01 <= console_select_sync;
-            else
-                swap_uart01 <= swap_uart01;
-            end if;
+--            if system_reset = '1' then
+--                swap_uart01 <= console_select_sync;
+--            else
+--                swap_uart01 <= swap_uart01;
+--            end if;
         end if;
     end process;
 
     -- GPIO input signal routing
-    gpio_input <= coldboot & swap_uart01 & "000000";
+    gpio_input <= coldboot & swap_uart01 & "00" & i_sw_sync; -- Added Input switches (TH)
 
     -- GPIO output signal routing
     leds(0) <= gpio_output(0);

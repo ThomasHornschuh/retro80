@@ -1,4 +1,7 @@
 {$R-}
+
+{$Impmprocd.inc}
+
 const soh=$01;
       stx=$02;
       ack=$06;
@@ -16,6 +19,7 @@ type tblock = array [1..1024] of byte;
 
 var  logfile,tracefile : text;
      blockfile : file;
+     osver : integer;
 
 
 Function UpdateCRC16(CRC       : Integer;      { CRC-16 to update  }
@@ -166,6 +170,20 @@ begin
 end;
 
 
+procedure setRawMode;
+const msgRaw : string[60] = 'Set console to raw mode';
+
+var pd : pPD;
+begin
+  writeln(msgRaw);
+  writeln(logfile,msgRaw);
+  pd:=ptr(bdoshl(xdosGetPD));
+  if pd<>nil then begin
+    pd^.name[1]:=pd^.name[1] or $80; (* Set High order bit *)
+  end else begin
+    writeln(logfile,'Warning: Raw mode could not be set');
+  end;
+end;
 
 
 begin
@@ -174,19 +192,25 @@ begin
     halt;
   end;
 
-  assign(blockfile,ParamStr(1));
-  rewrite(blockfile);
-
-
+  (*Check if we run under MP/M *)
+  osver:=bdoshl(163);
+  if hi(osver)<>1 then begin
+    writeln('This program requires MP/M');
+    halt;
+  end;
 
   assign(logfile,'xmodem.log');
-
   rewrite(logfile);
   if trace then begin
     assign(tracefile,'xmodem.trc');
     rewrite(tracefile);
   end;
   writeln('Start transfer...');
+  setRawMode;
+
+  assign(blockfile,ParamStr(1));
+  rewrite(blockfile);
+
   repeat
     bdos(141,62); (* Wait 62 Ticks ~ 1 Second *)
     write(con,chr(nack));
