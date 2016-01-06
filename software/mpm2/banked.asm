@@ -1,6 +1,9 @@
 ; Banked portion of XIOS
 ; include betweem jump table and commonbase label 
 
+
+
+
 ; disk parameter header (16 bytes for each drive), see page 6-28 in CP/M 2.2 operating system manual
 dpbase:
             ; disk 0 (A)
@@ -24,8 +27,8 @@ dpbase:
             dw chk01        ; CSV (unique scratch pad used to check for changed disks)
             dw alv01        ; ALV (unique scratch pad for allocation information)
             ; end of disk 1
-			
-			 ; disk 2 (C)
+            
+             ; disk 2 (C)
             dw 0            ; sector translation table (0 = no translation)
             dw 0            ; must be 0
             dw 0            ; must be 0
@@ -78,24 +81,25 @@ setdma:     ; set DMA address given by BC
             ld (curdmaaddr), bc ; may need to xfer to HL first?
             ret
 			
-; ---[ initialisation banked part ]-----------------------------	
-VECTOR_LENGTH equ 64	
+            
+; ---[ initialisation banked part ]-----------------------------    
+VECTOR_LENGTH equ 64    
 systeminit: ; initialise system -- info in C, DE, HL.
 
-			; TH: Init VGA Library 
-			ld a, 04H
-			ld (mapPage),a
-			call initvga
-			
+            ; TH: Init VGA Library 
+            ld a, 04H
+            ld (mapPage),a
+            call initvga
+            
             ld hl, initmsg
             call strout
-			
-			; Write init msg also to  status line 
-			ld bc, (39 shl 8) or 0H  ; Line 40, Column 1
-			ld ix,scrpb0 
-			ld hl, initmsg1
-			call writestrxy
-			
+            
+            ; Write init msg also to  status line 
+            ld bc, (39 shl 8) or 0H  ; Line 40, Column 1
+            ld ix,scrpb0 
+            ld hl, initmsg1
+            call writestrxy
+            
             ; initmsg can now be recycled as the sysvectors buffer
 
             ; put jump instruction at interrupt vector
@@ -103,18 +107,22 @@ systeminit: ; initialise system -- info in C, DE, HL.
             ;ld (0x38), a
             ;ld hl, interrupt_handler
             ;ld (0x39), hl
-			
-			; TH: Prepare Interrupt mode 2 handler
-			
-			ld hl, lastpage  
-			ld l, 0   ; HL will now contain int vector table base
-			ld bc, interrupt_handler
-			ld (hl), c
-			inc hl
-			ld (hl), b	
-			ld a,h
-			ld i,a  ; Load Z80 Interrupt table register 
-			
+            
+            ; TH: Prepare Interrupt mode 2 handler
+            
+            ;ld hl, lastpage  
+            ;ld l, 0   ; HL will now contain int vector table base
+            ;ld bc, interrupt_handler
+            ;ld (hl), c
+            ;inc hl
+            ;ld (hl), b
+			ld hl, intvector
+			ld a,l 
+			or a ; set flags
+            jr nz, panic ; Go panic when intvector is not located at a page boundary 			
+            ld a,h
+            ld i,a  ; Load Z80 Interrupt table register 
+            
             ; set up timer hardware to downcount at 50Hz
             ld a, TIMCMD_SEL_DOWNRESET
             out (TIMER_COMMAND), a
@@ -150,11 +158,19 @@ systeminit: ; initialise system -- info in C, DE, HL.
             or  0x0c
             out (UART1_STATUS), a
 
-            ; tell CPU to use interrupt mode 2 (Z80 interrupt vector table )			
-            im 2			
-            ; note that we don't call ei ourselves, since MP/M-II does this once we return		
-   if Q_INPUT			
-			call c0instart ; Start input process 
-   endif 			
-			jp sysinitc ; jump to part in commom memory 
-		
+            ; tell CPU to use interrupt mode 2 (Z80 interrupt vector table )            
+            im 2            
+            ; note that we don't call ei ourselves, since MP/M-II does this once we return      
+   if Q_INPUT           
+            call c0instart ; Start input process 
+   endif            
+            jp sysinitc ; jump to part in commom memory 
+            
+panic:		ld hl, panicmsg
+			call strout
+            hlt 
+panicmsg:   db "INT CHK HLT",13,10,0 
+			
+            
+            
+        

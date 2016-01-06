@@ -5,6 +5,9 @@
 
 ; handy cmdline for testing cycle: ./build && ( echo "rboot 200"; sleep 0.1; ~/projects/socz80/software/cpm2.2/receive/sendmany ./zout/resxios.rel ; sleep 0.1; echo "link resxios [os]"; sleep 0.2; echo "era bnkxios.spr"; sleep 0.1; echo "ren bnkxios.spr=resxios.spr"; sleep 0.1; echo "gensys \$a" ; sleep 0.5; echo "mpmldr" ) > /dev/ttyUSB1
 
+    public commonbase
+
+
 .z80        ; tell zmac to prefer z80 mnemonics
 startlabel: ; important that this assembles to offset 0 (or the linker will add a jump)
 
@@ -90,7 +93,20 @@ flag_uart1out  equ 9
             ; db 0, 0, 0      ; uncomment this if mp/m should poll devices when idling
             jp idle         ; custom idle procedure (optional)
 
+            include bnkproc.asm ; XIOS Background processes running in banked memory 
             include banked.asm ; Banked parts of the XIOS... 
+  
+
+bankedsize  equ $-startlabel  
+           
+            ds 256- (bankedsize mod 256) ; padding to page boundary
+            
+            ; gensys locates the 256 byte page with the commonbase always completly in common
+            ; memory. The padding above enforces starting a new page here
+            ; so everything from here on will be on a 256 byte page boundary in common area
+            ; e.g. address C000
+            
+intvector:  dw interrupt_handler; Z80 IM Mode 2 Interrupt table            
             
 ; everything AFTER the "commonbase" label is located in "common memory".
 ; everything BEFORE this is in banked memory
@@ -714,15 +730,33 @@ saved_stackptr: dw 0
 
 ;---------------------------------------------------------------------------------------------------------------
 ; debug functions (ideally to be removed in final version, if we ever get that far!)
+
 strout:     ; print string pointed to by HL
-            ; wait for UART0 transmitter to be idle
             ld a, (hl)
             cp 0
             ret z
             ld c, a
             call dbgout
             inc hl
-            jr strout
+            jr strout			
+			
+
+dbgout:     ; wait tx idle
+            in a, (UART0_STATUS)
+            bit 6, a
+            jr nz, dbgout
+            ; GO GO
+            ld a, c
+            out (UART0_DATA), a
+dbgwait:    ; wait tx idle again
+            in a, (UART0_STATUS)
+            bit 6, a
+            jr nz, dbgwait
+            ret
+
+debugc equ 0
+
+if debugc
 
 cstrout:   ; like strout but using XIOS conout, D points to console number
             ld a, (hl)
@@ -765,19 +799,7 @@ numeral:    add 0x30 ; start at '0' (0x30='0')
             call dbgout
             ret
 
-dbgout:     ; wait tx idle
-            in a, (UART0_STATUS)
-            bit 6, a
-            jr nz, dbgout
-            ; GO GO
-            ld a, c
-            out (UART0_DATA), a
-dbgwait:    ; wait tx idle again
-            in a, (UART0_STATUS)
-            bit 6, a
-            jr nz, dbgwait
-            ret
-            
+endif             
 
 ;---------------------------------------------------------------------------------------------------------------
 
@@ -807,11 +829,11 @@ chk00:      ds 0             ; check vector for disk 0 (must be CKS bytes long)
 chk01:      ds 0             ; check vector for disk 1 (must be CKS bytes long)
 chk02:      ds 0             ; check vector for disk 1 (must be CKS bytes long)
 
-                             ; space for interrupt vector table
+                             ; obsolete !!! space for interrupt vector table
 
-            ds 256           ; "waste" space to make sure that final code size will above a page boundary
+ ;           ds 256           ; "waste" space to make sure that final code size will above a page boundary
             
-lastpage:                    ; Dummy label marking end of BIOS - upper 8 Bits will be the last 256 Byte page            
+;lastpage:                    ; Dummy label marking end of BIOS - upper 8 Bits will be the last 256 Byte page            
             
     
 
