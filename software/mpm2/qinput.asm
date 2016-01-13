@@ -24,7 +24,12 @@
 	 
 ; Console 0 Input process
     
-    c0inpd: dw testpd ; Link to next process    
+    c0inpd: 
+	    if incltest
+	        dw testpd ; Link to next process
+        else			
+			dw 0 ; Link to next process
+        endif 			
             db 0  ; status
             db 32 ; prio
             dw c0stktop ; SP
@@ -38,6 +43,7 @@
             dw 0c7c7h,0c7c7h,0c7c7h; Stack
   c0stktop: dw c0inentry ; Entry point
   
+ if incltest
   
   testpd:   dw 0 ; Link to next process 
             db 0  ; status
@@ -53,6 +59,7 @@
             dw 0c7c7h,0c7c7h,0c7c7h; Stack
  tststktop: dw testproc ; Entry point
   
+ endif
   
   
   ; Queue for console 0 

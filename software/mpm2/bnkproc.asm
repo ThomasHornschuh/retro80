@@ -5,6 +5,10 @@ lldxy macro reg, x, y
   ld reg, (y shl 8) or x 
 endm
 
+incltest equ 0
+
+ if incltest
+
 testproc: ; Test process in banked memory
           ld c, 141 ; XDOS Delay 
           ld de, 60 ; ~1 second
@@ -24,6 +28,9 @@ tp2:      ld ix,scrpb0
           
 toggle: db 0;
 
+ endif
+ 
+ 
  if Q_INPUT 
  
    charESC equ 27   ; ASCII Code for ESC
