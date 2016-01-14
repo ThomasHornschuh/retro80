@@ -16,7 +16,7 @@ vMMUPageSel equ 0F8H
 vMMUFrameH  equ 0FCH
 vMMUFrameL  equ 0FDH
 
-ASCII_ESC	equ 27
+ASCII_ESC   equ 27
 
 ; Phyiscal Page address of screen buffer
 
@@ -42,9 +42,9 @@ scrpb&n:
             DB 0  ; Y Cursor Position 0..39 
             DW 0  ; Physical Page number of video buffer
             DB 0  ; <>0 => spb points to real vga frame buffer - update cursor registers...
-			DB 0FFH  ; ESC sequence index -- FF -> no ESC sequence in buffer 
-			DB 0     ; ESC sequence length 
-			DS 6  ; ESC Sequence buffer			
+            DB 0FFH  ; ESC sequence index -- FF -> no ESC sequence in buffer 
+            DB 0     ; ESC sequence length 
+            DS 6  ; ESC Sequence buffer         
 endm
 
 
@@ -59,9 +59,9 @@ screenPage equ cursY+1
 screenPageL equ screenPage
 screenPageH equ screenPageL+1
 physFlag    equ ScreenPageH+1
-escIndex 	equ physFlag+1;
+escIndex    equ physFlag+1;
 escLength   equ escIndex+1 
-escBuffer	equ escLength+1;
+escBuffer   equ escLength+1;
 
 
 
@@ -194,7 +194,25 @@ wxy0:       ld a, (hl)
 wxy1:       unmapVPage      
             ret     
             
-            
+
+delline:    ; Delete line at cursor Y position, IX points to scrpb
+            ld a,(ix+cursY)
+            sub lines ; calc number of lines to move
+            call mult80
+            push hl ; Save number of bytes to move
+            ; Calculate address of line to be deleted 
+            ld a,(ix+cursY)
+            call mult80  ; address now in HL 
+            call getmapva
+            ld d,a
+            ld e,0 ; DE <- beging of mappped screen buffer
+            add hl,de 
+            mov d,h
+            mov e,l ; DE now points to line to be deleted
+            ld bc,columns
+            add hl,bc ; HL points now to next line
+            pop bc ; restore number of bytes to move 
+            jr doscroll
             
             
 scroll:     ; Scrolls screen 1 line (append empty line at end ), ix points to scrpb
@@ -204,11 +222,11 @@ scroll:     ; Scrolls screen 1 line (append empty line at end ), ix points to sc
             ld h,a
             ld l,columns 
             ld bc, columns*(lines-1)
-            di
+ doscroll:  di
             mapVPage
             ldir
             ; clear bottom line
-			ex de,hl ; de points to begin of last line -> HL
+            ex de,hl ; de points to begin of last line -> HL
 clrl:       ld b,columns
 scrl1:      ld (hl),' '
             inc hl
@@ -220,32 +238,32 @@ scrl1:      ld (hl),' '
             
 insline:   ; Insert Line at cursor position, IX points to scrpb
 
-			ld a,lines-1
-			sub (ix+cursY) ; calculate number of lines to move down 
-			call mult80 ; HL will now contain number of bytes to move
-			push hl ; save 
+            ld a,lines-1
+            sub (ix+cursY) ; calculate number of lines to move down 
+            call mult80 ; HL will now contain number of bytes to move
+            push hl ; save 
 
-		    ld de,screensize-1
-			call getmapva
-			ld h,a
-			ld l,0
-			add hl,de ; HL points now to last byte of mapped screen buffer
-			ld d,h
-			ld e,l ; copy to DE
-			ld bc, columns*(-1) ; Load BC with twos complement of number of columns
-			add hl,bc ; HL=HL-columns 
-			pop bc ; restore saved value 
-			di 
-			mapVPage
-			ld a,b
-			or c ; check if BC = 0
-			jr z, nomove
-			lddr
-nomove:     			
-			; Now HL points to last moved byte, this should be start of line to be inserted
-			jr clrl ; fill with spaces, unmap, ei and return....
-			
-			                        
+            ld de,screensize-1
+            call getmapva
+            ld h,a
+            ld l,0
+            add hl,de ; HL points now to last byte of mapped screen buffer
+            ld d,h
+            ld e,l ; copy to DE
+            ld bc, columns*(-1) ; Load BC with twos complement of number of columns
+            add hl,bc ; HL=HL-columns 
+            pop bc ; restore saved value 
+            di 
+            mapVPage
+            ld a,b
+            or c ; check if BC = 0
+            jr z, nomove
+            lddr
+nomove:                 
+            ; Now HL points to last moved byte, this should be start of line to be inserted
+            jr clrl ; fill with spaces, unmap, ei and return....
+            
+                                    
 mult80:    ; Mutiply a with 80 return result in hl, will destroy b and de
            ;  hl = a*64 + a*16
 
@@ -267,9 +285,9 @@ mlp2:   sla l
         
 vgaconout:  ; Basic conout procedure  Reg C contains char -- IX contains scrpb
         ld a,(ix+escIndex)
-		cp 0ffh
-		jr nz,tviesc ; when in ESC sequence continue processing sequence 
-		; else output processing 
+        cp 0ffh
+        jr nz,tviesc ; when in ESC sequence continue processing sequence 
+        ; else output processing 
         ld a,c
         cp 0dh ; CR ?
         jr z, vccr
@@ -277,10 +295,10 @@ vgaconout:  ; Basic conout procedure  Reg C contains char -- IX contains scrpb
         jr z, vcolf 
         cp 08h ; backspace
         jr z, vcobackspace
-		cp 1AH ; Ctrl-Z
-        jr z, vcoctrlz 		
+        cp 1AH ; Ctrl-Z
+        jr z, vcoctrlz      
         cp ASCII_ESC
-        jr z, startesc		
+        jr z, startesc      
         cp 32
         ret m ; no regognized control chars -> ignore 
         call writechar
@@ -298,12 +316,12 @@ vco1:   ld (ix+cursX),a
         jr sethwcursor
 
 vcoctrlz: ; process Ctrl-Z (clear screen)   
-		ld c,0 
-		call clrscr
-		ld (ix+cursX),0
-		ld (ix+cursY),0 
-		ret 
-		
+        ld c,0 
+        call clrscr
+        ld (ix+cursX),0
+        ld (ix+cursY),0 
+        ret 
+        
         ; process a cr 
 vccr:   xor a
         jr vco1 
@@ -337,102 +355,104 @@ sethwcursor:
         ld a,(ix+cursY)
         out (CursorYReg),a                
         ret 
-		
+        
 startesc: ; Set "Terminal" into ESC processing mode
         ld a,0
-		ld (ix+escIndex),a
-		ret
-		        
+        ld (ix+escIndex),a
+        ret
+                
 
-; Handling of TV910 compatible ESC sequences 		
+; Handling of TV910 compatible ESC sequences        
 tviesc:  ; on entry c contains char, a contains current escIndex
-		cp 0 ; Check if we are at beginning of  ESC sequence 
-		jr nz, tvi1
+        cp 0 ; Check if we are at beginning of  ESC sequence 
+        jr nz, tvi1
         ; Look up supported Sequences
-		ld a,c		
-		cp '=' ; ESC = R C -> Cursor addressing
-		jr z, escEqual
-		cp 'R' ; Delete line
-		jr z,escR
-		cp 'E' ; Insert line
-		jr z,escE
-		cp 'T' ; Erase to end of line
-		jr z,escT
-		; all other commands 
+        ld a,c      
+        cp '=' ; ESC = R C -> Cursor addressing
+        jr z, escEqual
+        cp 'R' ; Delete line
+        jr z,escR
+        cp 'E' ; Insert line
+        jr z,escE
+        cp 'T' ; Erase to end of line
+        jr z,escT
+        ; all other commands 
 endEscMode:
-		ld (ix+escIndex),0FFH
-		ret 
-		
-escR:
-escE:	call insline
-		jr endEscMode
+        ld (ix+escIndex),0FFH
+        ret 
+        
+escR:   call delline
+        jr endEscMode
+        
+escE:   call insline
+        jr endEscMode
 escT:   
         ld a,(ix+cursX)
-esctl1:	
-		cp columns-1
-		jr z,endEscMode
+esctl1: 
+        cp columns-1
+        jr z,endEscMode
         ld e,a
-		ld a,(ix+cursY)
-		ld d,a
-		ld c,' '
-		push de
-		call writecharxy
-		pop de
-		ld a,e
-		inc a
-		jr esctl1	
-		
+        ld a,(ix+cursY)
+        ld d,a
+        ld c,' '
+        push de
+        call writecharxy
+        pop de
+        ld a,e
+        inc a
+        jr esctl1   
+        
 escEqual:
         call escUpdate
-		ld (ix+escLength),3 ; We expect a sequence with total 3 chars 
-        ret 		
-		
+        ld (ix+escLength),3 ; We expect a sequence with total 3 chars 
+        ret         
+        
 tvi1:   ld a,c
-		call escUpdate
-		ld a, (ix+escIndex)
-		cp (ix+escLength)
+        call escUpdate
+        ld a, (ix+escIndex)
+        cp (ix+escLength)
         ret m ; return if we have not received escLength chars
-; 	    if ESC seq. finished to processing
+;       if ESC seq. finished to processing
         push ix
-		pop hl
-		ld de,escBuffer
-		add hl,de 
-		ld a,(hl)
-		cp '=' ; currently ESC = is the only supported "long" sequence 
-		jr nz,endEscMode
-		inc hl
-		ld a, (hl) ; should be row 
-		sub ' '  ; number is offest by ascii space and 1 bases- so we need to correct this. 
-		; Range check
-		jr c, endEscMode
-		cp lines-1
-		jr nc,endEscMode
-		
-		ld (ix+cursY),a
-		inc hl
-		ld a,(hl)  ; should be column
-		sub ' '
-		; Range check
-		jr c, endEscMode
-		cp columns-1
-		jr nc,endEscMode
-		ld (ix+cursX),a
-		call sethwcursor
-		jr endEscMode
-		        		
-		
+        pop hl
+        ld de,escBuffer
+        add hl,de 
+        ld a,(hl)
+        cp '=' ; currently ESC = is the only supported "long" sequence 
+        jr nz,endEscMode
+        inc hl
+        ld a, (hl) ; should be row 
+        sub ' '  ; number is offest by ascii space and 1 bases- so we need to correct this. 
+        ; Range check
+        jr c, endEscMode
+        cp lines-1
+        jr nc,endEscMode
+        
+        ld (ix+cursY),a
+        inc hl
+        ld a,(hl)  ; should be column
+        sub ' '
+        ; Range check
+        jr c, endEscMode
+        cp columns-1
+        jr nc,endEscMode
+        ld (ix+cursX),a
+        call sethwcursor
+        jr endEscMode
+                        
+        
 escUpdate: ; Update ESC buffer with char in a
-		ld e, (ix+escIndex)
-		ld d,0
-		push ix
-		pop hl ; HL<-IX		
-		add hl,de
-		ld de, escBuffer
-		add hl,de 
-		ld (hl),a
-		inc (ix+escIndex)
-		ret 
-		
+        ld e, (ix+escIndex)
+        ld d,0
+        push ix
+        pop hl ; HL<-IX     
+        add hl,de
+        ld de, escBuffer
+        add hl,de 
+        ld (hl),a
+        inc (ix+escIndex)
+        ret 
+        
 
         
         
@@ -443,7 +463,7 @@ initscrpb: ; IX = Address of scrpb HL=ScreenPage
         ld (ix+cursX),0
         ld (ix+cursY),0
         ld (ix+physFlag),1
-		ld (ix+escIndex),0FFH 
+        ld (ix+escIndex),0FFH 
         ret
         
 initvga:   ; Initalize lib and Hardware
