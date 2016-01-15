@@ -196,8 +196,8 @@ wxy1:       unmapVPage
             
 
 delline:    ; Delete line at cursor Y position, IX points to scrpb
-            ld a,(ix+cursY)
-            sub lines ; calc number of lines to move
+            ld a,lines-1 
+            sub  (ix+cursY) ; calc number of lines to move
             call mult80
             push hl ; Save number of bytes to move
             ; Calculate address of line to be deleted 
@@ -320,7 +320,7 @@ vcoctrlz: ; process Ctrl-Z (clear screen)
         call clrscr
         ld (ix+cursX),0
         ld (ix+cursY),0 
-        ret 
+        jr sethwcursor
         
         ; process a cr 
 vccr:   xor a
@@ -376,6 +376,12 @@ tviesc:  ; on entry c contains char, a contains current escIndex
         jr z,escE
         cp 'T' ; Erase to end of line
         jr z,escT
+        cp 'G' ; ESC G - not supported but parsed correctly
+        jr z,esc2c
+        cp '['
+        jr z,esc2c
+        cp ']'
+        jr z,esc2c
         ; all other commands 
 endEscMode:
         ld (ix+escIndex),0FFH
@@ -405,40 +411,62 @@ esctl1:
 escEqual:
         call escUpdate
         ld (ix+escLength),3 ; We expect a sequence with total 3 chars 
-        ret         
+        ret      
+esc2c:  call escUpdate ; all ESC sequences with two chars 
+        ld (ix+escLength),2 ; 2 char sequence 
+        ret     
         
 tvi1:   ld a,c
         call escUpdate
         ld a, (ix+escIndex)
         cp (ix+escLength)
         ret m ; return if we have not received escLength chars
-;       if ESC seq. finished to processing
+;       if ESC seq. finished start processing it 
         push ix
         pop hl
         ld de,escBuffer
         add hl,de 
         ld a,(hl)
-        cp '=' ; currently ESC = is the only supported "long" sequence 
-        jr nz,endEscMode
         inc hl
-        ld a, (hl) ; should be row 
+        cp '=' ; ESC = R C  
+        jr nz,tvi2        
+        call escRow
+        inc hl
+        call escCol 
+tvi3:   call sethwcursor
+        jr endEscMode
+tvi2:   cp '[' ; ESC [R
+        jr nz, tvi4
+        call escRow
+        jr tvi3
+tvi4:   cp ']' ; ESC]C
+        jr nz,endEscMode
+        call escCol    
+        jr tvi3
+        
+; end of vgaconout         
+        
+; Helper subroutines 
+        
+        
+escRow: ld a,(hl)  ; process encoded row number in (hl)
         sub ' '  ; number is offest by ascii space and 1 bases- so we need to correct this. 
         ; Range check
-        jr c, endEscMode
-        cp lines-1
-        jr nc,endEscMode
-        
+        ret c
+        cp lines
+        ret nc
         ld (ix+cursY),a
-        inc hl
-        ld a,(hl)  ; should be column
-        sub ' '
+        ret 
+        
+escCol: ld a,(hl) ; process encoded column number in (hl)
+        sub ' '  ; number is offest by ascii space and 1 bases- so we need to correct this. 
         ; Range check
-        jr c, endEscMode
-        cp columns-1
-        jr nc,endEscMode
+        ret c
+        cp columns
+        ret nc
         ld (ix+cursX),a
-        call sethwcursor
-        jr endEscMode
+        ret        
+                        
                         
         
 escUpdate: ; Update ESC buffer with char in a
