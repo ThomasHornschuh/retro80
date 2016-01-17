@@ -157,8 +157,12 @@ NET O_VIDEO_R(3)   LOC="P121" | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;         
 NET O_VSYNC        LOC="P116" | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;          # C2
 NET O_HSYNC        LOC="P117" | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;          # C3
 
-# Input switches Arcade Megaing
+# Input switches Arcade Megawing
 NET I_SW(0)        LOC="P74"  | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;          # B8
 NET I_SW(2)        LOC="P95"  | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;          # B9
 NET I_SW(1)        LOC="P62"  | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;          # B10
 NET I_SW(3)        LOC="P59"  | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;          # B11
+
+# PS/2 Port a on Arcade Megawing
+NET PS2DATA        LOC="P114" | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST | PULLUP; # C0
+NET PS2CLKA        LOC="P115" | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST | PULLUP; # C1

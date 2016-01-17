@@ -212,11 +212,8 @@ begin
 			 when others => DBOut <= (others => 'X');
 		end case;	 
 	 end if;	
-   end process;	
+   end process;
 	
-	
-	
-	-- Synchronous logic
 	
 	process (r,g,b) begin
 	  for i in 0 to 3 loop 
@@ -225,6 +222,10 @@ begin
 		  O_VIDEO_B(i) <= b;
 	  end loop;
    end process;
+		
+	-- Synchronous logic
+	
+	
 
 -- RESET circuit
   -- Two FF (RES1=>RESET=>) behind each other

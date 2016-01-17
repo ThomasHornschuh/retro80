@@ -65,7 +65,10 @@ entity top_level is
 			  O_VIDEO_G : OUT std_logic_vector(3 downto 0);
 			  O_VIDEO_R : OUT std_logic_vector(3 downto 0);
 			  -- Push Button cross 
-			  I_SW : 	  in std_logic_vector(3 downto 0)
+			  I_SW : 	  in std_logic_vector(3 downto 0);
+			  -- PS/2 Port A
+			  PS2DATA : in std_logic;
+			  PS2CLKA : in std_logic
 			  
        );
 end top_level;
@@ -148,7 +151,8 @@ architecture Behavioral of top_level is
     signal gpio_cs              : std_logic;
 	 signal vram_cs				  : std_logic; -- TH: VGA VRAM select  
 	 signal vga_cs					  : std_logic; -- TH: VGA IO Register Select
-
+	 signal ps2a_cs				   : std_logic; -- TH
+ 
     -- data bus
     signal cpu_data_in          : std_logic_vector(7 downto 0);
     signal cpu_data_out         : std_logic_vector(7 downto 0);
@@ -165,6 +169,8 @@ architecture Behavioral of top_level is
     signal gpio_data_out        : std_logic_vector(7 downto 0);
 	 signal int_vector_out       : std_logic_vector(7 downto 0) := int_vector; -- TH
 	 signal vga_data_out		  	  : std_logic_vector(7 downto 0); -- TH
+	 signal ps2a_data_out		  : std_logic_vector(7 downto 0); -- TH
+	 
 	 
 
     -- GPIO
@@ -176,6 +182,7 @@ architecture Behavioral of top_level is
     signal timer_interrupt      : std_logic;
     signal uart0_interrupt      : std_logic;
     signal uart1_interrupt      : std_logic;
+	 signal ps2a_interrupt  	  : std_logic; -- TH
 	 
 
 begin
@@ -241,8 +248,9 @@ begin
     leds(4) <= cpu_wait;
 
     -- Interrupt signal for the CPU
-    cpu_interrupt_in <= (timer_interrupt or uart0_interrupt or uart1_interrupt);
+    cpu_interrupt_in <= (timer_interrupt or uart0_interrupt or uart1_interrupt or ps2a_interrupt);
 	 
+	 -- TH: Add of Display and PS/2 Keyboard
 	 
 	 display : entity work.vgatop
 	 PORT MAP(
@@ -262,7 +270,27 @@ begin
 		I_RESET => reset_button
 	);
 	 
+	
+   Inst_ps2A:  entity work.ps2A PORT MAP(
+		clk => clk,
+		reset => system_reset,
+		AdrBus => physical_address(1 downto 0),
+		data_in => cpu_data_out,
+		data_out =>ps2a_data_out,
+		cs => ps2a_cs ,
+		req_read => req_read,
+		req_write => req_write,
+		interrupt => ps2a_interrupt,
+		clk32Mhz => clk32Mhz,
+		ps2_clk => PS2CLKA,
+		ps2_data =>PS2DATA 
+	);
+
+	
+	
+	  
 	 
+	-- End TH 
 
     -- Z80 CPU core
     cpu: entity work.Z80cpu
@@ -312,6 +340,7 @@ begin
         rom_cs   <= '0';
         sram_cs  <= '0';
         dram_cs  <= '0';
+		  vram_cs  <= '0';
 
         -- io chip selects: default to unselected
         uartA_cs      <= '0';
@@ -322,6 +351,8 @@ begin
         spimaster1_cs <= '0';
         clkscale_cs   <= '0';
         gpio_cs       <= '0';
+		  vga_cs        <= '0'; -- TH
+		  ps2a_cs       <= '0'; -- TH
 
         -- memory address decoding
         -- address space is organised as:
@@ -352,7 +383,8 @@ begin
             when "00100" => gpio_cs             <= req_io;  -- 20 ... 27
             when "00101" => uartB_cs            <= req_io;  -- 28 ... 2F
             when "00110" => spimaster1_cs       <= req_io;  -- 30 ... 37
-				when "00111" => vga_cs					<= req_io;  -- 38 ... 3F
+				when "00111" => vga_cs					<= req_io;  -- 38 ... 3F  TH
+				when "01000" => ps2a_cs	            <= req_io;  -- 40 ... 48  TH  
                                                             -- unused ports
             when "11110" => clkscale_cs         <= req_io;  -- F0 ... F7
             when "11111" => mmu_cs              <= req_io;  -- F8 ... FF
@@ -388,6 +420,7 @@ begin
        dram_data_out       when       dram_cs='1' else
        sram_data_out       when       sram_cs='1' else
 		 vga_data_out        when       vram_cs='1' or vga_cs='1' else -- TH
+		 ps2a_data_out       when       ps2a_cs='1' else -- TH
        uart0_data_out      when      uart0_cs='1' else
        uart1_data_out      when      uart1_cs='1' else
        timer_data_out      when      timer_cs='1' else
