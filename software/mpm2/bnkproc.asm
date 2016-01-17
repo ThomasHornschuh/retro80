@@ -5,11 +5,11 @@ lldxy macro reg, x, y
   ld reg, (y shl 8) or x 
 endm
 
-incltest equ 0
 
- if incltest
 
-testproc: ; Test process in banked memory
+ if CONFPS2
+
+ps2proc: ; Test process in banked memory
           ld c, 141 ; XDOS Delay 
           ld de, 60 ; ~1 second
           call xdos
@@ -24,7 +24,7 @@ tp1:      ld c, ' '
 tp2:      ld ix,scrpb0
           lldxy de,52,39 
           call writecharxy
-          jr testproc   
+          jr ps2proc   
           
 toggle: db 0;
 

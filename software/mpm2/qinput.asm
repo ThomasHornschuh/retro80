@@ -25,8 +25,8 @@
 ; Console 0 Input process
     
     c0inpd: 
-	    if incltest
-	        dw testpd ; Link to next process
+	    if CONFPS2
+	        dw ps2pd ; Link to next process
         else			
 			dw 0 ; Link to next process
         endif 			
@@ -43,13 +43,13 @@
             dw 0c7c7h,0c7c7h,0c7c7h; Stack
   c0stktop: dw c0inentry ; Entry point
   
- if incltest
+ if CONFPS2
   
-  testpd:   dw 0 ; Link to next process 
+  ps2pd:   dw 0 ; Link to next process 
             db 0  ; status
             db 32 ; prio
-            dw tststktop ; SP
-            db 'testproc' ; name
+            dw ps2stktop ; SP
+            db 'ps2kbd' ; name
             db 0 ; console
             db 0h; memseg -> 0 system bank 
             ds 36
@@ -57,7 +57,7 @@
             dw 0c7c7h,0c7c7h,0c7c7h; Stack
             dw 0c7c7h,0c7c7h,0c7c7h; Stack
             dw 0c7c7h,0c7c7h,0c7c7h; Stack
- tststktop: dw testproc ; Entry point
+ ps2stktop: dw ps2proc ; Entry point
   
  endif
   

@@ -96,13 +96,13 @@ begin
 	
 	-- combinatorial logic
 	
-	interrupt <= intEnableRegister and statusRegister;
+	
 	
 	-- CPU Output Bus Multiplexer
 	
 	process(AdrBus) begin	 	 
        case AdrBus(0) is 
-			 when '0' => data_out<= "0000000"&statusRegister;						    
+			 when '0' => data_out<= "000000" & intEnableRegister & statusRegister;						    
 			 when '1' => data_out <= dataRegister;			 
 			 when others => data_out <= (others => 'X');
 		  end case;	 	
@@ -123,28 +123,34 @@ begin
 	process(clk) begin 
 
      -- The Status Register is set when a new char has received by the PS2 controller
-	  -- it is cleared with writing a 1 to bit 0  of the control port  
+	  -- it is cleared when reading from the data port   
 	  -- clearing has priority over set - so in case of an overlap the status bit will be set
 	  -- on next clk after the I/O cycle 
-	  -- Write to Bit 1 of the control port will set/reset the IntEnable Flag 
+	  -- Write to Bit 1 of the control port will set/reset the IntEnable Flag
+     -- The interrupt is acknowledged with writing a 1 to bit 7 of the control port 	  
 	
 	  if rising_edge(clk) then 
 	    if reset='1' then  
 	      statusRegister<='0';
 			intEnableRegister<='0';		  	  
-	    elsif req_write='1' and cs='1' and AdrBus(0)='0' then -- control port selected
-		 
-         if data_in(0) = '1' then 		 
-			  statusRegister<='0'; -- will reset status Register
-			  
+	    elsif req_write='1' and cs='1' and AdrBus(0)='0' then -- write to control port
+		 			
+			if data_in(7) = '1' then -- int Acknwoledge
+			   interrupt <= '0'; 
 			end if;
 			
 			intEnableRegister<=data_in(1);	
+			
+		 elsif req_read = '1' and cs='1' and AdrBus(0)='1' then -- read from data port
+			statusRegister<='0'; -- will reset status Register	
 			
 		 elsif dataReadyLatch='1' then 
 		    -- Latch Data from Keyboard Controller to I/O registers
 	      statusRegister<='1';
 		   dataRegister<=ps2Data;
+			if intEnableRegister='1' then
+			  interrupt <= '1';
+			end if;  
 			resDRLatch<='1'; -- clear Latch 
 		 else
 			resDRLatch<='0';

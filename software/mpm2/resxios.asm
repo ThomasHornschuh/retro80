@@ -12,7 +12,10 @@
 startlabel: ; important that this assembles to offset 0 (or the linker will add a jump)
 
 Q_INPUT       equ 1 ; Conditional define 
+CONFPS2       equ 1 ; Conditional define   
 
+
+; IO Ports 
 
 UART0_STATUS   equ 0x00   ; [7: RX READY] [6: TX BUSY] [6 unused bits]
 UART0_DATA     equ 0x01
@@ -43,6 +46,9 @@ TIMCMD_SEL_UPLATCH      equ 0x11
 TIMCMD_SEL_DOWNVAL      equ 0x12
 TIMCMD_SEL_DOWNRESET    equ 0x13
 
+PS2_CONTROL              equ 040H ; PS2 Control and status Port
+PS2_DATA                 equ 041H ; PS2 Data Port 
+
 ; XDOS function numbers
 xdos_terminate equ 0
 xdos_poll      equ 131
@@ -62,6 +68,7 @@ flag_uart0in   equ 6
 flag_uart1in   equ 7
 flag_uart0out  equ 8
 flag_uart1out  equ 9
+flag_ps2       equ 10 ; TH PS2 Data ready flag 
 
             ; BIOS vectors (largely CP/M compatible)
             jp commonbase   ; terminate process
@@ -681,6 +688,16 @@ uart1tx:    ; test transmit bit
             ld e, flag_uart1out
             call xdos
 uart1done:
+    if CONFPS2
+           in a,(PS2_CONTROL)
+           and 01H ; Check PS2 Status bit 
+           jr z,intdone 
+           ld a,82H ; Bit 7 int Ack, bit 1 enable interrupts 
+           out (PS2_CONTROL),a ; INT Acknowledge
+           ld c,xdos_flag_set
+           ld e,flag_ps2
+           call xdos
+    endif 
         
 intdone:    ; tidy up from interrupts, return via the dispatcher
             ; clear preempted flag
@@ -721,8 +738,10 @@ endif
 ; then used again as the stack during interrupts
 sysvectors:
 initmsg:    db 13, 10
-initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20160112])", 0 ; MP/M print a CRLF for us
-            ds (VECTOR_LENGTH - ($ - sysvectors))
+initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20161701,vga,ps2])", 0 ; MP/M print a CRLF for us
+          if ($ - sysvectors) < VECTOR_LENGTH
+            ds (VECTOR_LENGTH - ($ - sysvectors))  ; fill up to 64 Bytes if needed 
+          endif   
 ;            ds 8 ; pad to correct length
             .assert ($-sysvectors >= VECTOR_LENGTH) ; safety check
 interrupt_stack:
