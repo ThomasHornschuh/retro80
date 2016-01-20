@@ -95,10 +95,10 @@ systeminit: ; initialise system -- info in C, DE, HL.
             call strout
             
             ; Write init msg also to  status line 
-            ld bc, (39 shl 8) or 0H  ; Line 40, Column 1
-            ld ix,scrpb0 
-            ld hl, initmsg1
-            call writestrxy
+            ;ld bc, (39 shl 8) or 0H  ; Line 40, Column 1
+            ;ld ix,scrpb0 
+            ;ld hl, initmsg1
+            ;call writestrxy
             
             ; initmsg can now be recycled as the sysvectors buffer
 
@@ -110,12 +110,6 @@ systeminit: ; initialise system -- info in C, DE, HL.
             
             ; TH: Prepare Interrupt mode 2 handler
             
-            ;ld hl, lastpage  
-            ;ld l, 0   ; HL will now contain int vector table base
-            ;ld bc, interrupt_handler
-            ;ld (hl), c
-            ;inc hl
-            ;ld (hl), b
 			ld hl, intvector
 			ld a,l 
 			or a ; set flags

@@ -3,6 +3,8 @@
 
 .z80
 
+DEBUG equ 1 ; enable Debug output 
+
 PS2_CONTROL              equ 040H ; PS2 Control and status Port
 PS2_DATA                 equ 041H ; PS2 Data Port 
 
@@ -23,14 +25,27 @@ flag_ps2       equ 10 ; TH PS2 Data ready flag
 
   org 100H
   
-  start: jp ps2loop 
   
-         ret
   
+  
+  start:    ld ix, scrpb0
+            ld hl,PhysScreenPage        
+            call initscrpb
+            ld a,08H 
+            ld (mapPage),a ; Map frame buffer to 8000H             
+            jp ps2start   
+            ret
+  
+  vgastatusline equ 1  
+  include vgabasic.asm  
+  
+  ;defscrpb 0 ; Define screen control block 
 
-
-
+  l_german equ 1 ; Keyboard layout german 
+  
   include ps2kbd.asm   
-  
+   if l_german 
+    include lger.asm 
+  endif   
   
   .end start
