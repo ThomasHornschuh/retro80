@@ -33,6 +33,7 @@ lockFlags: db 0 ; Flags for Caps and Numlock Status
   numMask  equ 10B 
 
 converted: db 0 ; Result of key processing - converted ASCII code   
+convValid: db 0 ; <> 0 : converted is valid 
   
  
 ; State engine
@@ -96,19 +97,9 @@ cpi16 macro immed
       endm       
 
 
-toggleLockBit:  ; Reg C contains mask of bit to toggle, destroys a,d,e  
-            ld a,(lockFlags)
- comment #
-            ld d,a ; save in D
-            ld a,c 
-            cpl ; invert mask
-            and d ; a:= ~mask and lockFlags   
-            ld e,a ; save in e                         
-            ld a,d             
-            and c ; mask bit
-#            
+toggleLockBit:  ; Reg C contains mask of bit to toggle
+            ld a,(lockFlags)         
             xor c ; invert bit 
-;            or e  ; mix in the other bits  
             ld (lockFlags),a 
             ret 
             
@@ -141,8 +132,16 @@ codeReceived:
 cdr1:       call writeStatusline
             ret 
 
-          
-codeDecode:  ; The scancode decoder ....          
+; -----------------------------------------------------
+; begin Subprogram codeDecode 
+; The scancode decoder .... 
+; Takes lastCode and does
+;    - handling of shift, alt, ctrl, Lock keys to update keyFlags and lockFlags
+;    - convert all the other keys to their ASCII and control chars and updates
+;      the memory location <converted> with the resulting char  
+
+            
+codeDecode:           
             ld hl,(lastCode)            
             ld iy, keyFlags
             ld a,(flagBreak)
@@ -221,20 +220,44 @@ break5:      cpi16 0E011H
 break6:      ; TODO: Handle all other keys
             ld a,0     
             ld (converted),a              
-            ret             
+            ret          
+            
+; end Subprogram codeDecode 
+;-------------------------------------------------------  
 
             
 convExtended: 
-            ; TODO : Implement
-            ld a,0
-            ld (converted),a 
+            
+            ld a,l   
+            ld hl,extMap
+            ld b, extMapLen            
+            call searchMap  
+cnve3:      ld (convValid),a
+            or a ; set flags 
+            jr z,cnve1             
+            ld a,b  
+cnve1:      ld (converted),a 
             ret 
-
+            
+;------------------------------------------------------- 
+; begin Subprogram convStandard           
+            
 convStandard:   ; Handle standard keycodes - 
-                ;on entry l will contain lower byte of scan code             
+                ;on entry hl will contain  scan code             
              ld a,0 
-             ld (converted),a         
-             ld a,l ; get scancode              
+             ld (converted),a
+             ld (convValid),a     
+
+             ld a,(lockFlags)
+             and numMask ; Check for Num Lock 
+             jr nz, cnvs1 ; yes ->
+             ld a,l 
+             call cnvCursorBlock
+             or a; set flags , a contains ff if key was a cursor key
+             jr nz, cnvRetB ; -> finish b contains ASCII code              
+             ld hl,(lastCode)  ; refresh HL 
+             ; fall through 
+cnvs1:       ld a,l ; get scancode              
              cp lookupMax+1 ; range check 
              ret nc ;  return if we are out of range 
              ld hl,lookup1 ; Base of lookup table 
@@ -245,18 +268,31 @@ convStandard:   ; Handle standard keycodes -
              or a ; set flags 
              ret z ; ignore empty positions (should not happen....)              
              ld b,a ; now reg b contains the "neutral" ASCII code of the pressed key 
-             ld a,(keyFlags)
-             ld c,a ; save 
-             and shiftMask 
-             jr nz, cnvShifted
+             ld a,(keyFlags)             
+             ld c,a ; save
+             bit rAltKey,c ; "AltGr" ?
+             call nz, cnvAltGr ; handle AltGr - on return b contains ASCII 
              ld a,c
              and ctrlMask
-             jr nz, cnvCtrl 
-             bit rAltKey,c ; "AltGr" ?
-             jr nz, cnvAltGr 
-             ; else 
-             ld a,b 
-cnvRet:      ld (converted),a ; result 
+             push af 
+             call nz,applyCtrl ; Apply ctrl key - on return b contains ASCII 
+             pop af 
+             jr nz, cnvRetB ; when control is pressed ignore shift    
+             ld a,c    
+             and shiftMask 
+             jr nz, cnvShifted      
+             ld a,(lockFlags)
+             and capsMask ; Check CAPS Lock
+             ld a,b              
+             jr z,cnvRetA 
+             call toUpper
+             ld b,a ; faster and smaller than jr cnvRetA              
+             ; fall through 
+cnvRetB:     ld a,b ; restore              
+cnvRetA:      
+             ld (converted),a ; result 
+             ld a,1 
+             ld (convValid),a ; flag 
              ret              
 
 cnvShifted:
@@ -266,16 +302,79 @@ cnvShifted:
             cp 'z'+1 
             jr nc, noLetter
             sub 'a'-'A' ; convert to Upper case 
-            jr cnvRet  
+            jr cnvRetA  
             
-noLetter:   jr cnvRet ; TODO : implement           
+noLetter:   ld a,(lastCode)
+            cp 69H ; check if scan code is from num block
+            jr nc, cnvRetB ; Don't apply shiftmap to mum block keys
+            ld a,b 
+            ld hl,shiftMap
+            ld b,shiftMapLen
+            call searchMap
+            jr cnvRetB 
 
-cnvCtrl:    ; TODO : implement
-            ret  
+            
 
-cnvAltGr:             
-            ; TODO : implement
+ 
+; End subprogram convStandard  
+;------------------------------------------------------- 
+
+; sub program toUpper
+; converts char in a to upper case  
+toUpper:
+            cp 'a' 
+            ret c
+            cp 'z'+1 
+            ret nc 
+            sub 'a'-'A' ; convert to Upper case 
             ret 
+            
+;-------------------------------------------------------
+;sub program cnvAltGr takes ASCII char in reg b
+; and looks up altGrMap if there is a mapping 
+; if yes modifies char
+; in in case the result char is returned in b 
+; a is 0FF when search was succesfull, 0 otherwise 
+
+
+cnvAltGr:   ld a,b ; restore 
+            ld hl,altGrMap
+            ld b, altGrMapLen
+            ; fall through 
+searchMap:  cp (hl)
+            jr z, cnv1 ; found 
+            inc hl 
+            inc hl ;hl+=2 
+            djnz searchMap
+            ; nothing in map -> then use unmodified char 
+            ld b,a 
+            ld a,0 
+            ret          
+cnv1:       inc hl ; modified char is at next address 
+            ld b,(hl)
+            ld a,0ffH 
+            ret 
+
+; Entry point cnvCursorBlock - expects scancode in a             
+cnvCursorBlock:
+           ld hl, cursorMap
+           ld b, cursMapLen   
+           jr searchMap      
+
+;-------------------------------------------------------
+;sub program applyCtrl takes ASCII char in reg b 
+           
+applyCtrl:  ld a,b
+            call toUpper              
+            ; Check range 
+            cp '@'        
+            ret c 
+            cp ']'+1 
+            ret nc 
+            sub 40H ; Ctrl is just offset char with -40H  
+            ld b,a 
+            ret              
+            
             
 codePrint: 
            ld hl,(lastcode)

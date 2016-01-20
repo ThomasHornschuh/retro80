@@ -132,6 +132,38 @@ lookup1:  ; "Neutral" Keyboard lookup, no shift, no ctrl, no alt but assume num 
 lookup_end: 
  
 
-  lookupMax equ (lookup_end-lookup1) ; Max Index - result should be 7D 
+  lookupMax equ (lookup_end-lookup1-1) ; Max Index - result should be 7D 
 
+shiftMap: ; search Table for shifted character
+          ; contains pairs of chars, first the unshifted ascii char, then the shifted one
 
+ db '<>,;.:-_#''+*\?1!2"4$5%6&7/8(9)0='          
+ 
+ shiftMapLen equ ($-shiftMap) / 2 
+ 
+altGrMap: ; search table for alt-GR character 
+  db '<|+~q@7{8[9]0}'
+
+  altGrMapLen equ ($-altGrMap) / 2   
+
+extMap:    ; Search table for extented keys 
+           ; overlaps with cursor map   
+cursorMap: ; Search table for cursor keys 
+
+   db 6BH, 13H ; Left Arrow Ctrl-S
+   db 74H, 04H ; Right Arrow Ctrl-D
+   db 75H, 05H ; Up Ctrl-E
+   db 72H, 18H ; Down Ctrl-X
+   db 70H, 016H; Insert Ctrl-V 
+   db 7DH, 12H ; PgUp Ctrl-R
+   db 7AH, 03H ; PgDown Ctrl-C 
+   
+cursMapLen equ ($-cursorMap) / 2 
+   
+   db 5AH, 0DH ; Mum block enter 
+   db 4AH, '/' ; Num block /    
+   
+extMapLen equ ($-extMap) / 2   
+  
+  
+  
