@@ -8,23 +8,33 @@ endm
 
 
  if CONFPS2
+   DEBUG equ 0 
+   include ps2kbd.asm 
+   if L_GERMAN 
+     include lger.asm 
+   endif
 
-ps2proc: ; Test process in banked memory
-          ld c, 141 ; XDOS Delay 
-          ld de, 60 ; ~1 second
-          call xdos
-          ld a, (toggle)
-          cpl
-          ld (toggle),a
-          or a ; set flags 
-          jr z, tp1
-          ld c, '@'
-          jr tp2
-tp1:      ld c, ' '
-tp2:      ld ix,scrpb0
-          lldxy de,52,39 
-          call writecharxy
-          jr ps2proc   
+   ; PS/2 Keyboard uqcb                 
+   ps2wuqcb:    dw c1inq ; PS/2 is connected to console 1 
+               dw converted ; msg adr -> PS2 converted Char buffer              
+   
+   
+   
+  
+ps2proc:   ; PS/2 keyboard handler process 
+          in a,(PS2_DATA) ; clear  ps/2 controller 
+ps2pl1:   call ps2do  ; wait for input an process it 
+          ld a,(convValid) ; check if we have a converted ASCII code  
+          or a; set flags 
+          jr z, ps2pl1 ; no .. loop again
+          ; else write char to queue
+          ld a,0
+          ld (convValid),a ; clear semaphore 
+                    
+          ld c, writeque
+          ld de, ps2wuqcb
+          call xdos                    
+          jr ps2pl1    
           
 toggle: db 0;
 

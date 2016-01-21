@@ -3,7 +3,7 @@
 
 .z80
 
-DEBUG equ 1 ; enable Debug output 
+DEBUG equ 0 ; enable Debug output 
 
 PS2_CONTROL              equ 040H ; PS2 Control and status Port
 PS2_DATA                 equ 041H ; PS2 Data Port 
@@ -25,16 +25,37 @@ flag_ps2       equ 10 ; TH PS2 Data ready flag
 
   org 100H
   
-  
+           
   
   
   start:    ld ix, scrpb0
             ld hl,PhysScreenPage        
             call initscrpb
             ld a,08H 
-            ld (mapPage),a ; Map frame buffer to 8000H             
-            jp ps2start   
-            ret
+            ld (mapPage),a ; Map frame buffer to 8000H  
+            
+          ld c,135 ; open queue 
+          ld de, uqcb
+          call xdos           
+
+ ps2pl1:  call ps2do  ; wait for input an process it 
+          ld a,(convValid) ; check if we have a converted ASCII code  
+          or a; set flags 
+          jr z, ps2pl1 ; no .. loop again
+          ; else write char to queue
+          ld a,(converted)
+          
+          call bdoscon 
+          ld a,0 
+          ld (convValid),a 
+          
+                
+          ld c, 139 ;  writeque
+          ld de, uqcb
+          call xdos                    
+          jr ps2pl1   
+
+
   
   vgastatusline equ 1  
   include vgabasic.asm  
@@ -86,5 +107,10 @@ bdoscon:    ld e, a
    if l_german 
     include lger.asm 
   endif   
+  
+   uqcb:    ds 2 ; pointer
+            dw converted ; point directly to conversion buffer 
+            db 'c1inque ' ; name
+  
   
   .end start

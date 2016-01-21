@@ -49,11 +49,13 @@
             db 0  ; status
             db 32 ; prio
             dw ps2stktop ; SP
-            db 'ps2kbd' ; name
+            db 'ps2kbd  ' ; name
             db 0 ; console
             db 0h; memseg -> 0 system bank 
             ds 36
             
+            dw 0c7c7h,0c7c7h,0c7c7h; Stack
+            dw 0c7c7h,0c7c7h,0c7c7h; Stack
             dw 0c7c7h,0c7c7h,0c7c7h; Stack
             dw 0c7c7h,0c7c7h,0c7c7h; Stack
             dw 0c7c7h,0c7c7h,0c7c7h; Stack
@@ -99,7 +101,8 @@
 ; Output QCB (for writer)
   c1inwqcb:     dw c1inq
                 dw ch0write ; !! Both queues share the same message buffer 
-    
+                
+  
  
   ; This is an entry point called from BDOS/User program over the conin vector 
   conin0q: ;; XIOS conin reading from queue

@@ -12,7 +12,8 @@
 startlabel: ; important that this assembles to offset 0 (or the linker will add a jump)
 
 Q_INPUT       equ 1 ; Conditional define 
-CONFPS2       equ 1 ; Conditional define   
+CONFPS2       equ 1 ; Conditional define - PS/2 Keyboard support  
+L_GERMAN      equ 1 ; Conditional define - German Layout  
 
 
 ; IO Ports 
@@ -738,11 +739,11 @@ endif
 ; then used again as the stack during interrupts
 sysvectors:
 initmsg:    db 13, 10
-initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20161701,vga,ps2])", 0 ; MP/M print a CRLF for us
+initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20162001,vga,ps2])", 0 ; MP/M print a CRLF for us
           if ($ - sysvectors) < VECTOR_LENGTH
             ds (VECTOR_LENGTH - ($ - sysvectors))  ; fill up to 64 Bytes if needed 
           endif   
-;            ds 8 ; pad to correct length
+
             .assert ($-sysvectors >= VECTOR_LENGTH) ; safety check
 interrupt_stack:
 saved_stackptr: dw 0

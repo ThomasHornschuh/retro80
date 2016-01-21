@@ -44,12 +44,18 @@ convValid: db 0 ; <> 0 : converted is valid
 
 mstate: db sstart; State engine status register    
     
-ps2start:   in a,(PS2_DATA) ; clear  ps/2 controller    
-ps2loop:    ld c, xdos_flag_wait
+ps2start:   in a,(PS2_DATA) ; clear  ps/2 controller   
+
+ps2loop:    call ps2do
+            jr ps2loop 
+
+;----------------------------------------------
+; subprogramm ps2do 
+;----------------------------------------------            
+ps2do:      ld c, xdos_flag_wait
             ld e, flag_ps2
             call xdos ; wait 
-            ;jr ps2loop
-            
+                       
 ps2read:    in a,(PS2_DATA)
             cp 0F0H
             jr z, setBreak
@@ -71,15 +77,18 @@ setState:   ld (mstate),a
             call z, codeReceived    
             ld a,0
             ld (flagBreak),a ; Reset break flag     
-            jr ps2loop
+            ret 
             
 setBreak:   ld (flagBreak),a 
-            jr ps2loop
+            ret 
             
 setExt:     ld (lastcode+1),a 
             ld a,ext
             jr setState
-            
+
+;------------------------------------------------------
+; end ps2do 
+;------------------------------------------------------            
 
 compareCode:  ; Compares scancode in HL with scancode in DE
               ; set Z when equal
@@ -107,7 +116,9 @@ codeReceived:
             if DEBUG            
             call codePrint
             endif 
+            
             call codeDecode
+            
             if DEBUG 
             ld a,(converted)
             or a ; set flags 
@@ -217,9 +228,7 @@ break5:      cpi16 0E011H
             jr nz,break6
             res rAltKey,(iy+0)
             ret
-break6:      ; TODO: Handle all other keys
-            ld a,0     
-            ld (converted),a              
+break6:                 
             ret          
             
 ; end Subprogram codeDecode 
@@ -375,7 +384,7 @@ applyCtrl:  ld a,b
             ld b,a 
             ret              
             
-            
+if DEBUG             
 codePrint: 
            ld hl,(lastcode)
            ld a,h
@@ -393,23 +402,24 @@ codePrint:
            cpi16 0E02FH
            jp z, 0 ; Terminate when menu key pressed 
            ret 
+           
+endif            
+           
 writeBlank:
            ld hl,msgBlank           
-writeKeyStat: ; calls writestrxy but preserves BC,DE,HL ; adds msgLength+1 to c before exit          
-           push hl 
+writeKeyStat: ; calls writestrxy but preserves BC,DE ; adds msgLength+1 to c before exit          
            push bc
            push de
            call writestrxy
            pop de
            pop bc
-           pop hl
            ld a,c 
            add msgLength+1 
            ld c,a 
            ret 
 
-writeStatusline:  ; Write Keyboard status to status line 
-           ldxy bc, 2, physlines-1 
+writeStatusline:  ; Write Keyboard status to status line  
+           ld bc, ((physlines-1) shl 8 ) or 2 
            ld ix,scrpb0
            ld a,(keyFlags)
            ld e,a ; save 
@@ -469,37 +479,7 @@ msgBlank:   DB '     ',0
 msgLength equ 5            
 
 
-; Keyboard conversion tables
 
-
-; print the byte in A as two hex nibbles
-outcharhex:
-            push bc
-            push af  ; save value
-            ; print the top nibble
-            rra
-            rra
-            rra
-            rra
-            call outnibble
-            ; print the bottom nibble
-            pop af 
-            call outnibble
-            pop bc
-            ret
-
-; print the nibble in the low four bits of A
-outnibble:
-            and 0x0f ; mask off low four bits
-            cp 10
-            jr c, numeral ; less than 10?
-            add 0x07 ; start at 'A' (10+7+0x30=0x41='A')
-numeral:    add 0x30 ; start at '0' (0x30='0')
-            ;; Entry point to write character in a to console  
-bdoscon:    ld e, a
-            ld c,2 ; BDOS Console out 
-            call 5H ; call BDOS 
-            ret
 
            
             
