@@ -66,6 +66,7 @@ escBuffer   equ escLength+1;
 
 
 mapVPage macro 
+        mmuEnter 0FEH ; "Owner" Video system 
         ld a, (mapPage)
         out (vMMUPageSel),a
         in a,(vMMUFrameL)
@@ -79,6 +80,7 @@ mapVPage macro
 endm
 
 unmapVPage macro
+        mmuLeave 
         ld a, (mapPage)
         out (vMMUPageSel),a
         ld a,(FrameSaveL)
@@ -124,14 +126,14 @@ writechar:  ; Write char at current cursor positon of scrpb
             or h ; Merge  with high order byte of screen offest
             ld h,a 
                         
-            di ; disable interrupts 
+            ;di ; disable interrupts 
             mapVPage
             ld (hl),c ; finally output :-)
             unmapVPage
-            ei              
+            ;ei              
             ret             
             
-clrscr:     ; Clears the screen (fill with blank), IX ontains scrpb. Again code runs with interrupts disabled and without stack usage
+clrscr:     ; Clears the screen (fill with blank), IX ontains scrpb. 
             ; C contains flag c=0: Clear only screen without status line, c=1: clear including status lines 
             ; Will not change interrupt enable - so make sure that no MMU changes are done while this code is running 
             call getmapva
@@ -222,7 +224,7 @@ scroll:     ; Scrolls screen 1 line (append empty line at end ), ix points to sc
             ld h,a
             ld l,columns 
             ld bc, columns*(lines-1)
- doscroll:  di
+ doscroll:  ;di
             mapVPage
             ldir
             ; clear bottom line
@@ -232,7 +234,7 @@ scrl1:      ld (hl),' '
             inc hl
             djnz scrl1              
             unmapVPage
-            ei
+            ;ei
             ret
             
             
@@ -317,7 +319,9 @@ vco1:   ld (ix+cursX),a
 
 vcoctrlz: ; process Ctrl-Z (clear screen)   
         ld c,0 
+        ;di 
         call clrscr
+        ;ei 
         ld (ix+cursX),0
         ld (ix+cursY),0 
         jr sethwcursor

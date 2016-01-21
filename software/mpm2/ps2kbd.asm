@@ -52,9 +52,14 @@ ps2loop:    call ps2do
 ;----------------------------------------------
 ; subprogramm ps2do 
 ;----------------------------------------------            
-ps2do:      ld c, xdos_flag_wait
+ps2do:      in a,(PS2_CONTROL)
+            and 01H ; check status bit 
+            jr nz,ps2read ; -> data available 
+            ; Else wait for next interrupt 
+            ld c, xdos_flag_wait
             ld e, flag_ps2
             call xdos ; wait 
+            jr ps2do 
                        
 ps2read:    in a,(PS2_DATA)
             cp 0F0H
@@ -64,12 +69,12 @@ ps2read:    in a,(PS2_DATA)
             ld l,a ; save code 
             ld a,(mstate)
             cp ext
-            jr nz, ps2l1
-            ; if state ext only update lower byte of lastcode
+            jr nz, ps2l1 ; mstate <> ext ->     
+            ; if state ext only update lower byte of lastcode            
             ld a,l
             ld (lastcode),a
             jr ps2l2             
-ps2l1:      ld h,0
+ps2l1:      ld h,0 
             ld (lastcode),hl
 ps2l2:      ld a,code
 setState:   ld (mstate),a
@@ -140,6 +145,7 @@ codeReceived:
             call bdoscon
             
             endif 
+           
 cdr1:       call writeStatusline
             ret 
 

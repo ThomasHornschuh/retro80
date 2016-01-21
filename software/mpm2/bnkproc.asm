@@ -15,15 +15,27 @@ endm
    endif
 
    ; PS/2 Keyboard uqcb                 
-   ps2wuqcb:    dw c1inq ; PS/2 is connected to console 1 
-               dw converted ; msg adr -> PS2 converted Char buffer              
+ps2wuqcb:   dw c1inq ; PS/2 is connected to console 1 
+            dw converted ; msg adr -> PS2 converted Char buffer              
    
-   
+ps2stkmsg: db 'PANIC: STK Overflow ps2kbd',0    
    
   
 ps2proc:   ; PS/2 keyboard handler process 
           in a,(PS2_DATA) ; clear  ps/2 controller 
-ps2pl1:   call ps2do  ; wait for input an process it 
+          ; main loop...
+ps2pl1:   ld a,(ps2stk)
+          cp 0c7h ; check for stack possible stack overflow
+          jr z, ps2pl2 ; ok...
+          or a ; as side effect clears carry 
+          ld hl,ps2stk 
+          sbc hl, sp ; sp should be greater then HL
+          jr c, ps2pl2 ; if yes ok 
+          ; else panic           
+          ld hl, ps2stkmsg
+          jp panic 
+          
+ps2pl2:   call ps2do  ; wait for input and process it 
           ld a,(convValid) ; check if we have a converted ASCII code  
           or a; set flags 
           jr z, ps2pl1 ; no .. loop again
@@ -108,14 +120,15 @@ toggle: db 0;
             jr c0inl2
             
  c0inl3:    in a, (UART0_DATA)
-            ld hl,rawMode ; check rawMode flag 
-            bit 7,(hl)
-            jr nz, c0inl2 ; if set -> no ESC processing 
-            cp charESC ; ESC Char ?
-            jr nz, c0inl2 ; no
-            call updkbdstatus ; store ESC char in kbdstatus, update status line             
-            jr c0inloop; wait for next char...
-                            
+            IF  CONINSWITCH
+                ld hl,rawMode ; check rawMode flag 
+                bit 7,(hl)
+                jr nz, c0inl2 ; if set -> no ESC processing 
+                cp charESC ; ESC Char ?
+                jr nz, c0inl2 ; no
+                call updkbdstatus ; store ESC char in kbdstatus, update status line             
+                jr c0inloop; wait for next char...
+            ENDIF                 
  c0inl2:    ld (ch0write),a 
             ;ld c,cndwrque
             ld c, writeque
@@ -148,7 +161,9 @@ updkbdstatus: ; Reg A contains kbd status
   uk1:     ld hl,msgesc
   uk2:     lldxy bc, 73,39
   wrstat:  ld ix,scrpb0 
+           di
            call writestrxy
+           ei 
            ret  
                 
  endif          

@@ -47,14 +47,14 @@
   
   ps2pd:   dw 0 ; Link to next process 
             db 0  ; status
-            db 32 ; prio
+            db 15 ; prio give high prio to avoid loosing scan codes 
             dw ps2stktop ; SP
             db 'ps2kbd  ' ; name
-            db 0 ; console
+            db 1 ; console
             db 0h; memseg -> 0 system bank 
             ds 36
             
-            dw 0c7c7h,0c7c7h,0c7c7h; Stack
+  ps2stk:   dw 0c7c7h,0c7c7h,0c7c7h; Stack
             dw 0c7c7h,0c7c7h,0c7c7h; Stack
             dw 0c7c7h,0c7c7h,0c7c7h; Stack
             dw 0c7c7h,0c7c7h,0c7c7h; Stack
@@ -106,7 +106,9 @@
  
   ; This is an entry point called from BDOS/User program over the conin vector 
   conin0q: ;; XIOS conin reading from queue
-            call checkraw  
+            if CONINSWITCH
+            call checkraw 
+            endif             
             ld c,readque
             ld de, c0inrqcb ; Read qcb
             call xdos
@@ -115,7 +117,9 @@
             ret 
             
   const0q: ; XIOS constat
+            if CONINSWITCH
             call checkraw 
+            endif 
             ld a,(c0msg) ; Peek in queue len 
             or a ; set flags  
             ret z ; When no msg just return with a=0            
@@ -137,7 +141,9 @@
             ret z ; When no msg just return with a=0            
             ld a,0ffh               
             ret             
- 
+
+
+if CONINSWITCH            
 ; Helpers 
 checkraw: ; Checks if raw mode is set in the current process descriptor
             ld c,getprocd
@@ -159,9 +165,14 @@ checkraw: ; Checks if raw mode is set in the current process descriptor
             jr chkraw1  
   noRaw:    ld hl,msgblnk
   chkraw1:  ldxy bc, 69,39 
+            push ix ; for CP/M programs that dont expect the BIOS using Z80 registers
             ld ix,scrpb0 
+            di
             call writestrxy
+            ei 
+            pop ix 
             ret  
+ENDIF 
 
 ;start c0in process
 

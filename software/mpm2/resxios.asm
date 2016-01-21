@@ -11,11 +11,35 @@
 .z80        ; tell zmac to prefer z80 mnemonics
 startlabel: ; important that this assembles to offset 0 (or the linker will add a jump)
 
-Q_INPUT       equ 1 ; Conditional define 
-CONFPS2       equ 1 ; Conditional define - PS/2 Keyboard support  
-L_GERMAN      equ 1 ; Conditional define - German Layout  
+; Conditional defines 
+
+Q_INPUT       equ 1 ;   Queued input 
+CONINSWITCH   equ 1 ;   Enable  Console switch funktion for UART0  
+CONFPS2       equ 1 ;   PS/2 Keyboard support  (requires Q_INPUT)
+L_GERMAN      equ 1 ;   German Layout  
+MMU_SECTION   equ 1 ;   Enable MMU critical section handling 
 
 
+if MMU_SECTION 
+
+mmuEnter macro owner
+        ld a,owner 
+        call enterMMU
+endm
+        
+mmuLeave macro
+        call leaveMMU
+endm
+
+else
+
+mmuEnter macro 
+endm
+
+mmuLeave macro
+endm 
+endif  
+ 
 ; IO Ports 
 
 UART0_STATUS   equ 0x00   ; [7: RX READY] [6: TX BUSY] [6 unused bits]
@@ -319,6 +343,64 @@ returnzero:
 unimplemented:
             xor a
             ret
+            
+            
+; MMU critical section handling 
+
+enterMMU: 
+          push hl 
+          di ; disable interrupts 
+          ld hl, mmuSema
+          bit 0, (hl) ; Check if semaphore is set 
+          jr nz, enter01
+          ; if not 
+          set 0,(hl) ; set it 
+          inc hl 
+          ld (hl),a ; set MMU owner 
+          pop hl
+          ret 
+enter01:  
+          call outcharhex ; write new owner in a 
+          ld c,' '
+          call dbgout
+          ld a,(mmuOwner)          
+          call outcharhex ; old owner 
+          ld c,' '
+          call dbgout
+          
+          inc sp 
+          inc sp ; jump over pushed hl 
+          ld hl,0
+          add hl,sp 
+          ld b, 16 ; 16 stack entries max            
+dumpStack:          
+          ld c,(hl) ; low byte
+          inc hl 
+          ld a,(hl)  ; high byte 
+          inc hl 
+          call outcharhex
+          ld a,c 
+          call outcharhex 
+          ld c,' '
+          call dbgout 
+          djnz dumpStack 
+          ld hl, mmuPanic
+          jp panic 
+
+leaveMMU:
+          push af 
+          ld a,0
+          ld (mmuSema),a 
+          ld (mmuOwner),a 
+          ld a, (preempted)
+          or a ; set flags 
+          jr nz, leave01 
+          ei ; enable interrupts 
+leave01:  pop af 
+          ret             
+          
+                    
+            
 
 ; ---[ RAM disk driver ]----------------------------
 
@@ -326,6 +408,7 @@ unimplemented:
 
 read:       ; read from our RAM disk
             call swtuser  ; bank switch to user segment
+            
             call mapmmu
             ; HL now points to the location where our data is stored
             ; DE now points at the DMA buffer
@@ -357,11 +440,12 @@ mapmmu:     ; use MMU to map the physical page corresponding to the drive data
             ; MMU:   HHHLLLLLLLL              (3 bit hi, 8 bit low, low 12 bits come from logical address accessed)
 
             ; start by picking where in our address space to map the disk memory
-            ; we know PC is in Fxxx so we can't use that
+            ; we know PC is in Cxxx (!!) so we can't use that
             ; we have to avoid SP and the target DMA address
             ; SP >= 0x8000 -> use 0x2000 unless DMA is in 0x2000 in which case use 0x4000
-            ; SP  < 0x8000 -> use 0xA000 unless DMA is in 0xA000 in which case use 0xC000
+            ; SP  < 0x8000 -> use 0xA000 unless DMA is in 0xA000 in which case use 0x9000
             
+            mmuEnter 0FFH ; "Owner" Disk system             
             ; turn on disk access LED
             in a, (GPIO_OUTPUT)
             set 3, a
@@ -389,9 +473,10 @@ use_a0:     ld a, l
             jr z, use_c0
             ld a, 0xa
             jr foundframe
-use_c0:     ld a, 0xc
+use_c0:     ld a, 0x9 ; TH change from 0xC to 0x9 for MP/M 
             ; fall through to foundframe
 foundframe: ; selected frame in register a
+         
             out (MMU_PAGESEL), a ; select page frame
             and a ; clear carry flag (for rla)
             rla   ; shift left four bits
@@ -451,10 +536,13 @@ unmapmmu:   ; put MMU mapping for frame back as it was
             out (MMU_FRAMEHI), a
             ld a, (mmutemp2)
             out (MMU_FRAMELO), a
+        
+            mmuLeave
             ; turn off disk access LED
             in a, (GPIO_OUTPUT)
             res 3, a
             out (GPIO_OUTPUT), a
+                      
             ret
 
 ; -- Additional XIOS functions (not used in CP/M) below
@@ -500,6 +588,7 @@ doselmemory: ; systeminit will jump here with bank in A
             add 4
             ld l, a   ; adjust upwards
 bankmmu:    ; now we program the MMU!
+            mmuEnter (bc)
             ld b, BANKED_PAGES
             ld c, 0
 nextpage:   ld a, c
@@ -511,6 +600,7 @@ nextpage:   ld a, c
             inc c
             inc hl
             djnz nextpage
+            mmuLeave 
             ret
 
 ; ---[ timer tick ]---------------------------------
@@ -722,8 +812,11 @@ idle:       halt
 ; !! Bug in zasm: include is not allowed to be in column 1
   include   vgabasic.asm
 
-  vconout: ld ix,scrpb0
-           jp vgaconout 
+  vconout: push ix ; some CP/M programs may not expect BIOS to change Z80 regs.
+           ld ix,scrpb0
+           call vgaconout 
+           pop ix 
+           ret 
                 
 
 ; New queued console input mechanism
@@ -732,14 +825,14 @@ if Q_INPUT
   include qinput.asm
 endif 
     
-                
+mmuPanic:  db ' MMU hazard',0;                
                 
 ;---------------------------------------------------------------------------------------------------------------
 ; this string must be AT LEAST 64 bytes since we use it as a copy buffer inside systeminit, and
 ; then used again as the stack during interrupts
-sysvectors:
+sysvectors:  
 initmsg:    db 13, 10
-initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20162001,vga,ps2])", 0 ; MP/M print a CRLF for us
+initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20162101,vga,ps2])", 0 ; MP/M print a CRLF for us
           if ($ - sysvectors) < VECTOR_LENGTH
             ds (VECTOR_LENGTH - ($ - sysvectors))  ; fill up to 64 Bytes if needed 
           endif   
@@ -774,7 +867,11 @@ dbgwait:    ; wait tx idle again
             jr nz, dbgwait
             ret
 
-debugc equ 0
+panic:      call strout
+            hlt     
+            
+            
+debugc equ 1 
 
 if debugc
 
@@ -834,8 +931,11 @@ mmutemp2:   db 0x77
 tickspersec equ 50
 tickcount:  db tickspersec  ; count down ticks to measure one second
 ticking:    db 0    ; bool: system timer ticking?
-preempted:  db 0    ; bool: pre-empted?
+preempted:  db 1    ; bool: pre-empted? clear after in XIOS init !!!
 curbank:    db 0
+
+mmuSema:    db 0 
+mmuOwner:   db 0 
 
 
 

@@ -93,16 +93,11 @@ systeminit: ; initialise system -- info in C, DE, HL.
             
             ld hl, initmsg
             call strout
-            
-            ; Write init msg also to  status line 
-            ;ld bc, (39 shl 8) or 0H  ; Line 40, Column 1
-            ;ld ix,scrpb0 
-            ;ld hl, initmsg1
-            ;call writestrxy
-            
+                        
             ; initmsg can now be recycled as the sysvectors buffer
 
             ; put jump instruction at interrupt vector
+            ; outdated !!!!
             ;ld a, 0xc3 ; jump instruction
             ;ld (0x38), a
             ;ld hl, interrupt_handler
@@ -113,7 +108,7 @@ systeminit: ; initialise system -- info in C, DE, HL.
 			ld hl, intvector
 			ld a,l 
 			or a ; set flags
-            jr nz, panic ; Go panic when intvector is not located at a page boundary 			
+            jr nz, intpanic ; Go panic when intvector is not located at a page boundary 			
             ld a,h
             ld i,a  ; Load Z80 Interrupt table register 
             
@@ -161,16 +156,17 @@ systeminit: ; initialise system -- info in C, DE, HL.
 
             ; tell CPU to use interrupt mode 2 (Z80 interrupt vector table )            
             im 2            
-            ; note that we don't call ei ourselves, since MP/M-II does this once we return      
+            ; note that we don't call ei ourselves, since MP/M-II does this once we return
+            ld a,0 
+            ld (preempted),a     
    if Q_INPUT           
             call c0instart ; Start input process 
    endif            
             jp sysinitc ; jump to part in commom memory 
             
-panic:		ld hl, panicmsg
-			call strout
-            hlt 
-panicmsg:   db "INT CHK HLT",13,10,0 
+intpanic:	ld hl, panic_int
+			jp panic             
+panic_int:   db "INT CHK HLT",13,10,0 
 			
             
             
