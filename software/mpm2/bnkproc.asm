@@ -23,6 +23,13 @@ ps2stkmsg: db 'PANIC: STK Overflow ps2kbd',0
   
 ps2proc:   ; PS/2 keyboard handler process 
           in a,(PS2_DATA) ; clear  ps/2 controller 
+          
+          if Q_INPUT = 0  
+            ld c,makeque
+            ld de,c1inq
+            call xdos           
+          endif 
+          
           ; main loop...
 ps2pl1:   ld a,(ps2stk)
           cp 0c7h ; check for stack possible stack overflow
@@ -48,8 +55,6 @@ ps2pl2:   call ps2do  ; wait for input and process it
           call xdos                    
           jr ps2pl1    
           
-toggle: db 0;
-
  endif
  
  

@@ -159,7 +159,7 @@ systeminit: ; initialise system -- info in C, DE, HL.
             ; note that we don't call ei ourselves, since MP/M-II does this once we return
             ld a,0 
             ld (preempted),a     
-   if Q_INPUT           
+   if Q_INPUT or CONFPS2           
             call c0instart ; Start input process 
    endif            
             jp sysinitc ; jump to part in commom memory 

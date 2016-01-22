@@ -13,9 +13,9 @@ startlabel: ; important that this assembles to offset 0 (or the linker will add 
 
 ; Conditional defines 
 
-Q_INPUT       equ 1 ;   Queued input 
+Q_INPUT       equ 0 ;   Queued input for UART0 
 CONINSWITCH   equ 1 ;   Enable  Console switch funktion for UART0  
-CONFPS2       equ 1 ;   PS/2 Keyboard support  (requires Q_INPUT)
+CONFPS2       equ 1 ;   PS/2 Keyboard support
 L_GERMAN      equ 1 ;   German Layout  
 MMU_SECTION   equ 1 ;   Enable MMU critical section handling 
 
@@ -195,31 +195,39 @@ tbljmp:     add a  ; *2
             ex de, hl
             jp (hl)    ; jump to procedure
 
-; ---[ UART demux ]---------------------------------
+; ---[ console demux ]---------------------------------
 
-const:      ; read UART input ready status
+const:     
             call ptbljmp
         if Q_INPUT
             dw const0q
             dw const1q 
         else
             dw uart0pollin
-            dw uart1pollin
+            if CONFPS2
+              dw const1q
+            else  
+              dw uart1pollin
+            endif   
         endif 
            
 
-conin:      ; UART input
+conin:      
             call ptbljmp
         if Q_INPUT  
             dw conin0q ; Queued input 
             dw conin1q
         else
             dw uart0in
-            dw uart1in
+            if CONFPS2
+              dw conin1q 
+            else   
+              dw uart1in
+            endif   
         endif       
             
 
-conout:     ; UART output
+conout:    
             call ptbljmp
             dw uart0out
             dw vconout 
@@ -275,6 +283,7 @@ uart0read:  in a, (UART0_DATA)
             jr input_fixup
 endif           
 
+if CONFPS2 = 0 
 uart1in:    call uart1pollin
             or a ; test result
             jr nz, uart1read
@@ -290,6 +299,8 @@ uart1in:    call uart1pollin
 uart1read:  in a, (UART1_DATA)
             jr input_fixup
 
+endif 
+            
 input_fixup: ; fix up data read from UARTs in A; for now we just replace backspace with Ctrl-H
             ;cp 0x7f ; backspace?
             ;ret nz
@@ -315,6 +326,7 @@ uart0write: ld a, c
             out (UART0_DATA), a ; transmit character
             ret
 
+if CONFPS2 = 0 
 uart1out:   call uart1pollout
             or a ; test result
             jr nz, uart1write
@@ -331,7 +343,7 @@ uart1out:   call uart1pollout
 uart1write: ld a, c
             out (UART1_DATA), a ; transmit character
             ret
-
+endif 
 ; ---[ list device ]--------------------------------
 
 listst:     ; return list device status
@@ -566,6 +578,7 @@ doselmemory: ; systeminit will jump here with bank in A
             ld a, (curbank)      ; load current bank number
             cp l                 ; compare to desired bank number
             ret z                ; fastpath if it's what we've already got paged in
+
             in a, (GPIO_OUTPUT)  ; load GPIO outputs
             and 0xf8             ; mask off low 3 bits (LEDs)
             or l                 ; put stashed bank number on low 3 bits
@@ -588,7 +601,7 @@ doselmemory: ; systeminit will jump here with bank in A
             add 4
             ld l, a   ; adjust upwards
 bankmmu:    ; now we program the MMU!
-            mmuEnter (bc)
+           
             ld b, BANKED_PAGES
             ld c, 0
 nextpage:   ld a, c
@@ -600,7 +613,6 @@ nextpage:   ld a, c
             inc c
             inc hl
             djnz nextpage
-            mmuLeave 
             ret
 
 ; ---[ timer tick ]---------------------------------
@@ -819,10 +831,12 @@ idle:       halt
            ret 
                 
 
-; New queued console input mechanism
+
 
 if Q_INPUT
   include qinput.asm
+else 
+  include xiospd.asm   
 endif 
     
 mmuPanic:  db ' MMU hazard',0;                
@@ -832,7 +846,7 @@ mmuPanic:  db ' MMU hazard',0;
 ; then used again as the stack during interrupts
 sysvectors:  
 initmsg:    db 13, 10
-initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20162101,vga,ps2])", 0 ; MP/M print a CRLF for us
+initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20162201,vga,ps2])", 0 ; MP/M print a CRLF for us
           if ($ - sysvectors) < VECTOR_LENGTH
             ds (VECTOR_LENGTH - ($ - sysvectors))  ; fill up to 64 Bytes if needed 
           endif   
