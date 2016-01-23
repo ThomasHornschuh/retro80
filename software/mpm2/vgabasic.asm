@@ -76,17 +76,17 @@ mapVPage macro
         ld a,(ix+ScreenPageL)
         out (vMMUFrameL),a
         ld a,(ix+ScreenPageH)
-        out (vMMUFrameH),a
+        out (vMMUFrameH),a        
 endm
 
-unmapVPage macro
-        mmuLeave 
+unmapVPage macro            
         ld a, (mapPage)
         out (vMMUPageSel),a
         ld a,(FrameSaveL)
         out (vMMUFrameL),a
         ld a,(FrameSaveH)
         out (vMMUFrameH),a
+        mmuLeave 
 endm        
 
 getmapva:   ; Calculate virtual address of mapPage
@@ -125,12 +125,10 @@ writechar:  ; Write char at current cursor positon of scrpb
             call getmapva ; get virtual address of screen map 
             or h ; Merge  with high order byte of screen offest
             ld h,a 
-                        
-            ;di ; disable interrupts 
+                                    
             mapVPage
             ld (hl),c ; finally output :-)
-            unmapVPage
-            ;ei              
+            unmapVPage                  
             ret             
             
 clrscr:     ; Clears the screen (fill with blank), IX ontains scrpb. 
@@ -224,17 +222,19 @@ scroll:     ; Scrolls screen 1 line (append empty line at end ), ix points to sc
             ld h,a
             ld l,columns 
             ld bc, columns*(lines-1)
- doscroll:  ;di
+ doscroll:  
             mapVPage
-            ldir
-            ; clear bottom line
+            ld a,b  
+            or c ; check if BC = 0
+            jr z, scrl2 ; -> yes: skip 
+            ldir            
+scrl2:      ; clear bottom line       
             ex de,hl ; de points to begin of last line -> HL
 clrl:       ld b,columns
 scrl1:      ld (hl),' '
             inc hl
             djnz scrl1              
-            unmapVPage
-            ;ei
+            unmapVPage            
             ret
             
             

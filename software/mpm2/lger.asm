@@ -155,6 +155,7 @@ cursorMap: ; Search table for cursor keys
    db 75H, 05H ; Up Ctrl-E
    db 72H, 18H ; Down Ctrl-X
    db 70H, 016H; Insert Ctrl-V 
+   db 71H, 07FH; Delete (RubOut)
    db 7DH, 12H ; PgUp Ctrl-R
    db 7AH, 03H ; PgDown Ctrl-C 
    

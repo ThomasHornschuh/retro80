@@ -372,6 +372,8 @@ enterMMU:
           pop hl
           ret 
 enter01:  
+          ; output on MMU panic 
+          ; 
           call outcharhex ; write new owner in a 
           ld c,' '
           call dbgout
@@ -400,15 +402,13 @@ dumpStack:
           jp panic 
 
 leaveMMU:
-          push af 
           ld a,0
           ld (mmuSema),a 
           ld (mmuOwner),a 
           ld a, (preempted)
           or a ; set flags 
-          jr nz, leave01 
+          ret nz
           ei ; enable interrupts 
-leave01:  pop af 
           ret             
           
                     
@@ -846,7 +846,7 @@ mmuPanic:  db ' MMU hazard',0;
 ; then used again as the stack during interrupts
 sysvectors:  
 initmsg:    db 13, 10
-initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20162201,vga,ps2])", 0 ; MP/M print a CRLF for us
+initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20162301,vga,ps2])", 0 ; MP/M print a CRLF for us
           if ($ - sysvectors) < VECTOR_LENGTH
             ds (VECTOR_LENGTH - ($ - sysvectors))  ; fill up to 64 Bytes if needed 
           endif   
@@ -865,8 +865,8 @@ strout:     ; print string pointed to by HL
             ld c, a
             call dbgout
             inc hl
-            jr strout			
-			
+            jr strout           
+            
 
 dbgout:     ; wait tx idle
             in a, (UART0_STATUS)
