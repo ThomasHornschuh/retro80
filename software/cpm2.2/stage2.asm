@@ -2,12 +2,12 @@
 ; from 0x1000 upwards, then jumps to 0x1000, with the first physical page of 
 ; the boot disk in HL.
 
-UART0_STATUS:  equ 0x0000 ; [7: RX READY] [6: TX BUSY] [6 unused bits]
-UART0_DATA:    equ 0x0001
-MMU_PAGESEL:   equ 0xF8
-MMU_PERM:      equ 0xFB
-MMU_FRAMEHI:   equ 0xFC
-MMU_FRAMELO:   equ 0xFD
+UART0_STATUS  equ 0x0000 ; [7: RX READY] [6: TX BUSY] [6 unused bits]
+UART0_DATA    equ 0x0001
+MMU_PAGESEL   equ 0xF8
+MMU_PERM      equ 0xFB
+MMU_FRAMEHI   equ 0xFC
+MMU_FRAMELO   equ 0xFD
 
             org 0x1000 ; load address
 start:      ; unmap the ROM and replace it with RAM
@@ -140,9 +140,9 @@ stackptr:   ; put our stack below config
 
 ; configuration -- can be overridden easily since it's at the end of the sector.
 ; if you add more variables, add them here (ie maintain addresses of existing stuff) and adjust padding.
-loadaddr:   dw 0xe000  ; address to start loading, must be a multiple of 0x1000 (pad the start of your payload if you need otherwise)
-pagecount:  db 0x02    ; number of 4KB pages to read
+loadaddr:   dw 0xd000  ; address to start loading, must be a multiple of 0x1000 (pad the start of your payload if you need otherwise)
+pagecount:  db 0x03    ; number of 4KB pages to read
             db 0x00    ; ignored, must be zero (high byte for future 16-bit page count)
-bootvector: dw 0xfa00  ; virtual address to load at
+bootvector: dw 0xf500  ; virtual address to jump to (org of cbios.asm )
 bootstrap:  db 0xba, 0xbe  ; ROM checks for this code to indicate bootability
 myorg:      dw 0x1000  ; ROM will load our 4K page to this address in memory

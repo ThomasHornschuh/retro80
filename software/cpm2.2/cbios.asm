@@ -7,28 +7,61 @@
 ;  http://www.retrotechnology.com/dri/cpm_features.html
 ;  cpmtools package
 
-UART0_STATUS:  equ 0x0000 ; [7: RX READY] [6: TX BUSY] [6 unused bits]
-UART0_DATA:    equ 0x0001
-MMU_PAGESEL:   equ 0xF8
-MMU_PERM:      equ 0xFB
-MMU_FRAMEHI:   equ 0xFC
-MMU_FRAMELO:   equ 0xFD
+; Adaptions TH 24.01.2016: Include PS/2 Keyboard and  CRT Video Display Support
+; Needs adapated SOCZ80 Hardware
 
-msize:   equ 64 ; KB of system RAM
-bias:    equ (msize-20)*1024
-ccp:     equ 0x3400+bias
-bdos:    equ ccp+0x0806
-bios:    equ ccp+0x1600
-cdisk:   equ 0x0004 ; current disk number, 0=a, 1=b ... 15=p apparently also current user number is in here (in the top 4 bits?)
-iobyte:  equ 0x0003 ; intel "standard" i/o byte
+    .z80 
 
-org bios
+;-----------------------------------------------------------
+                ; TH: BIOS Base Address 
+bios equ 0F500H ; Change this if BIOS does not fit anymore 
+;-----------------------------------------------------------
 
+VGACONS equ 1 ; Enable VGA and PS/2 Console 
+L_GERMAN equ 1 ; Keyboard Layout German 
+CRTPAGE equ 0EH ; 
+
+; IO Ports 
+UART0_STATUS  equ 0x0000 ; [7: RX READY] [6: TX BUSY] [6 unused bits]
+UART0_DATA    equ 0x0001
+MMU_PAGESEL   equ 0xF8
+MMU_PERM      equ 0xFB
+MMU_FRAMEHI   equ 0xFC
+MMU_FRAMELO   equ 0xFD
+PS2_CONTROL   equ 040H ; PS2 Control and status Port
+PS2_DATA      equ 041H ; PS2 Data Port 
+
+msize   equ 64 ; KB of system RAM
+
+
+;TH : Redefinition of memory size calculation to calc backwards from BIOS Base 
+ccp  equ bios - 01600H ; CP/M CCP+BDOS are 1600H Bytes in size 
+bdos equ ccp+0x0806
+
+ccpPage equ  (high(ccp) and 0F0H) shl 8 ; e.g when CCP starts at DF00 then ccpPage will be D0 
+
+sectorOffset equ ( ccp-ccpPage + 4096 ) / 128 ; Offset of CP/M image in system track  
+
+; end  TH 
+
+cdisk   equ 0x0004 ; current disk number, 0=a, 1=b ... 15=p apparently also current user number is in here (in the top 4 bits?)
+iobyte  equ 0x0003 ; intel "standard" i/o byte
+
+ org bios
+
+biosstart: 
+ 
 ; jump vector table used by CP/M
             jp boot         ; cold start
 wboote:     jp wboot        ; warm start
+     if VGACONS
+            jp ps2constat
+            jp ps2conin           
+     else
             jp const        ; console status
             jp conin        ; console character in
+            
+    endif         
             jp conout       ; console character out
             jp list         ; list character out
             jp punch        ; punch character out
@@ -67,7 +100,7 @@ dpbase:
             dw alv01        ; ALV (unique scratch pad for allocation information)
             ; end of disk 1
 
-ndisks:     equ 2           ; number of disks we defined
+ndisks     equ 2           ; number of disks we defined
 
 ; disk parameter block (can be shared by all disks with same configuration)
 ; my RAM disks are each 2MB in size;
@@ -89,19 +122,27 @@ dpblk:
 
 ; bios functions follow
 boot:       
+            ld a,h ; HL will contain RAM Disk base page of boot disk, eg 02H 04H or 06H
+            rra  ; div 2 
+            dec a ; -1 
+            ld (bootdisk),a 
+                        
             ; perform standard CPM initialisation
             xor a
             ld (iobyte), a
             ld (cdisk), a
+          if VGACONS
+            call crtinit
+          endif   
             ; say hello
             ld hl, bootmsg
             call strout
             jp gocpm
 
 wboot:      ; warm boot -- reload CCP and then run it again, we also reload BDOS for good measure
-            ; CCP+BDOS is located in track 0 at offset 0x1400 ie sector 40
+            ; CCP+BDOS is located in track 0 at sector  sectorOffset
             ; CCP+BDOS is 0x1600 bytes long, ie 44 sectors.
-            ; so we read 44 sectors from sector 40 onwards into memory starting at address ccp
+            ; so we read 44 sectors into memory starting at address ccp
 
             ; put our stack in the default DMA buffer
             ld sp, 0x100 ; 0x80 ... 0x100 is the default DMA buffer
@@ -110,8 +151,9 @@ wboot:      ; warm boot -- reload CCP and then run it again, we also reload BDOS
             ;    call strout
             ;    call crlf
 
-            ; select disk 0
-            ld c, 0
+            ; select boot disk 
+            ld a,(bootdisk)
+            ld c,a            
             call seldsk
 
             ; select track 0
@@ -122,7 +164,7 @@ wboot:      ; warm boot -- reload CCP and then run it again, we also reload BDOS
             call setdma
 
             ; select first sector
-            ld bc, 40
+            ld bc, sectorOffset 
             call setsec
 
             ; count of sectors to load
@@ -184,15 +226,15 @@ conin:      ; read character from console into A; wait if no character ready
             jr z, conin ; keep waiting if no character ready
             in a, (UART0_DATA) ; read character
             ; fix backspace
-            cp 0x7f ; backspace?
-            ret nz
-            ld a, 8 ; ctrl-h
+ ;           cp 0x7f ; backspace?
+ ;           ret nz
+ ;           ld a, 8 ; ctrl-h
             ret
 
-conout:     ; write chracter from C to console
+uconout:     ; write chracter from C to console
             in a, (UART0_STATUS)
             bit 6, a
-            jr nz, conout ; loop again if transmitter is busy
+            jr nz, uconout ; loop again if transmitter is busy
             ld a, c
             out (UART0_DATA), a ; transmit character
             ret
@@ -212,15 +254,7 @@ reader:     ; read character from reader device (which we don't have)
             ret
 
 seldsk:     ; select disk indicated by register C
-            ;; push bc
-            ;; push bc
-            ;; ld hl, seldskmsg
-            ;; call strout
-            ;; pop bc
-            ;; ld a, c
-            ;; call outcharhex
-            ;; call crlf
-            ;; pop bc
+            
 
             ld hl, 0    ; return code 0 indicates error
             ld a, c
@@ -294,27 +328,8 @@ setdma:     ; set DMA address given by BC
             ret
 
 read:       ; read from our RAM disk
-;               ld hl, readmsg
-;               call strout
-;               ld a, (curdisk)
-;               call outcharhex
-;               ld a, (curtrack)
-;               call outcharhex
-;               ld a, (cursector)
-;               call outcharhex
-;               ld c, '@'
-;               call conout
-;               ld a, (curdmaaddr+1)
-;               ld c, a
-;               call outcharhex
-;               ld a, (curdmaaddr)
-;               ld c, a
-;               call outcharhex
+
             call mapmmu
-;               ld c, ']'
-;               call conout
-            ; HL now points to the location where our data is stored
-            ; DE now points at the DMA buffer
 docopy:     ld bc, 0x80 ; transfer 128 bytes
             ldir ; copy copy copy!
             call unmapmmu ; put MMU back as it was
@@ -322,29 +337,8 @@ docopy:     ld bc, 0x80 ; transfer 128 bytes
             ret
 
 write:      ; write to our RAM disk
-;              push bc
-;              push hl
-;              push de
-;              ld hl, writemsg
-;              call strout
-;              ld a, (curdisk)
-;              call outcharhex
-;              ld a, (curtrack)
-;              call outcharhex
-;              ld a, (cursector)
-;              call outcharhex
-;              ld c, '@'
-;              call conout
-;              ld a, (curdmaaddr+1)
-;              ld c, a
-;              call outcharhex
-;              ld a, (curdmaaddr)
-;              ld c, a
-;              call outcharhex
-            call mapmmu
-;              ld c, ']'
-;              call conout
 
+            call mapmmu
             ; HL now points to the location where our data is stored
             ; DE points to the DMA buffer
             ex de, hl ; swap HL/DE
@@ -473,7 +467,9 @@ strout:     ; print string pointed to by HL
             cp 0
             ret z
             ld c, a
+            push hl
             call conout
+            pop hl 
             inc hl
             jr strout
 
@@ -511,7 +507,9 @@ numeral:    add 0x30
             call conout
             ret
 
-bootmsg:    db "\rCP/M BIOS (Will Sowerbutts, 2013-11-05)\r\nCP/M 2.2 Copyright 1979 (c) by Digital Research\r\n", 0
+bootmsg:    db 0DH,"CP/M BIOS (Will Sowerbutts, 2013-11-05)",0DH,0AH
+            db "VGA and PS/2 Version (Thomas Hornschuh, 2016-01-24)",0DH,0AH
+            db "CP/M 2.2 Copyright 1979 (c) by Digital Research",0DH,0AH,0
 ;; wbootmsg:   db "WBOOT ", 0
 ;; readmsg:    db "[RD ", 0
 ;; writemsg:   db "[WR ", 0
@@ -521,6 +519,81 @@ bootmsg:    db "\rCP/M BIOS (Will Sowerbutts, 2013-11-05)\r\nCP/M 2.2 Copyright 
 ;; setdmamsg:  db "SETDMA ", 0
 
 ;---------------------------------------------------------------------------------------------------------------
+
+
+; VGA Video Support  and PS/2 Keyboard support 
+;---------------------------------------------------------------------------------------------------------------
+
+if VGACONS
+
+; Because the CP/M BIOS is not doing any multitasking and bank switching we don't need
+; any special critical section handling when tampering with the MMU
+; so we can define the mmuEnter and mmuLeave Marcos  empty 
+
+mmuEnter macro
+  
+endm
+
+mmuLeave macro 
+    
+endm
+  vgastatusline equ 1  
+
+ include ../mpm2/vgabasic.asm 
+ 
+  conout equ crtconout ; Map conout label 
+ 
+  crtinit: 
+       ld a, CRTPAGE 
+       ld (mapPage),a
+       call initvga  
+ 
+ 
+  crtconout: ; BIOS conout for VGA 
+       push ix
+       ld ix,scrpb0 
+       call vgaconout
+       pop ix
+       ret 
+  
+ 
+ DEBUG equ 0 
+ xdos equ 0 ; Dummy define will disable xdos support 
+ include ../mpm2/ps2kbd.asm 
+ if L_GERMAN 
+   include ../mpm2/lger.asm 
+ endif
+ 
+ ps2conin: ; BIOS conin for  PS/2 keyboard 
+          ld a,(convValid) ; check if we have a converted ASCII code  
+          or a; set flags
+          jr nz,ps2con1; Yes...
+          call ps2do  ; check  for input and process it 
+           
+          jr ps2conin ; loop again 
+          
+          ;return char 
+ ps2con1: ld a,0
+          ld (convValid),a ; clear semaphore  
+          ld a,(converted)
+          ret 
+          
+ ps2constat: ; BIOS constat for PS/2 keyboard   
+          in a, (PS2_CONTROL)
+          and 01H ; check status bit 
+          call nz, ps2read ; if data availble process it 
+          ld a,(convValid)
+          or a; set flags 
+          ret z 
+          ld a,0FFH
+          ret           
+else 
+  conout equ uconout ; Map conout to UART conout           
+endif  
+;---------------------------------------------------------------------------------------------------------------
+
+
+bootdisk:    ds 1 ; Space to store boot disk address 
 
 
 
@@ -540,5 +613,12 @@ alv01:      ds 64            ; allocation vector for disk 1, must be (DSM/8)+1 b
 chk00:      ds 0             ; check vector for disk 0 (must be CKS bytes long)
 chk01:      ds 0             ; check vector for disk 1 (must be CKS bytes long)
 
-db "</bios>"
+            db "</bios>"
+ 
+biosend: ; Dummy Label to show BIOS end address 
+ 
+biossize equ $-biosstart              
 ; we point the stack at 0x0000 on restart, so that may overwrite the very end of RAM.
+
+ end boot 
+ 
