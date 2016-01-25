@@ -21,6 +21,8 @@ VGACONS equ 1 ; Enable VGA and PS/2 Console
 L_GERMAN equ 1 ; Keyboard Layout German 
 CRTPAGE equ 0EH ; 
 
+DISKDEBUG equ 0 ; Disk I/O Debug output enable 
+
 ; IO Ports 
 UART0_STATUS  equ 0x0000 ; [7: RX READY] [6: TX BUSY] [6 unused bits]
 UART0_DATA    equ 0x0001
@@ -328,7 +330,10 @@ setdma:     ; set DMA address given by BC
             ret
 
 read:       ; read from our RAM disk
-
+         if DISKDEBUG
+            ld iy, readmsg
+            call printdisk
+         endif             
             call mapmmu
 docopy:     ld bc, 0x80 ; transfer 128 bytes
             ldir ; copy copy copy!
@@ -337,7 +342,10 @@ docopy:     ld bc, 0x80 ; transfer 128 bytes
             ret
 
 write:      ; write to our RAM disk
-
+          if DISKDEBUG
+            ld iy, writemsg
+            call printdisk
+          endif  
             call mapmmu
             ; HL now points to the location where our data is stored
             ; DE points to the DMA buffer
@@ -362,31 +370,53 @@ mapmmu:     ; use MMU to map the physical page corresponding to the drive data
             ; SP >= 0x8000 -> use 0x2000 unless DMA is in 0x2000 in which case use 0x4000
             ; SP  < 0x8000 -> use 0xA000 unless DMA is in 0xA000 in which case use 0xC000
 
+            ; TH: Additional check because DMA buffer can cross a page boundary 
+            ; CP/M allow the DMA buffer to be at any possible memory address 
+            ld a,(curdmaaddr+1) 
+            and 0F0H 
+            ld d,a ; Store start page of current DMA in d             
+            ld hl,(curdmaaddr)
+            ld bc,128 
+            add hl,bc ; Calculate End of DMA buffer 
+            ld a,h 
+            and 0F0H 
+            ld e,a ; store end page of current DMA in e 
+                        
             ld hl, 0    ; you can't read sp ...
-            add hl, sp  ; but you can add it to hl!
-            ; re-use l register
-            ld a, (curdmaaddr+1)
-            and 0xf0
-            ld l, a     ; store top 4 bits of DMA address in L
+            add hl, sp  ; but you can add it to hl!                                                 
             ld a, h     ; test top bit of SP
             and 0x80
             jr z, use_a0   ; top bit of SP is not set, SP is in low 32K
             ; top bit of SP is set, SP is in high 32K
-            ld a, l
+            ld a, d ; check conflict with DMA start 
             cp 0x20
             jr z, use_40
+            ld a, e  ; check conflict with DMA end 
+            cp 0x20 
+            jr z, use_40 
             ld a, 0x2
             jr foundframe
+            
 use_40:     ld a, 0x4
             jr foundframe
-use_a0:     ld a, l
+            
+use_a0:     ld a, d ; check conflict with DMA start 
             cp 0xa0
+            jr z, use_c0
+            ld a, e  ; check conflict with DMA end 
+            cp 0xa0 
             jr z, use_c0
             ld a, 0xa
             jr foundframe
 use_c0:     ld a, 0xc
             ; fall through to foundframe
 foundframe: ; selected frame in register a
+       if DISKDEBUG
+           push af 
+           call outcharhex
+           call crlf
+           pop af 
+       endif 
             out (MMU_PAGESEL), a ; select page frame
             and a ; clear carry flag (for rla)
             rla   ; shift left four bits
@@ -461,7 +491,7 @@ unmapmmu:   ; put MMU mapping for frame back as it was
             ret
 
 ;---------------------------------------------------------------------------------------------------------------
-; debug functions (ideally to be removed in final version, if we ever get that far!)
+
 strout:     ; print string pointed to by HL
             ld a, (hl)
             cp 0
@@ -472,7 +502,20 @@ strout:     ; print string pointed to by HL
             pop hl 
             inc hl
             jr strout
-
+            
+  if DISKDEBUG            
+dbgconout equ uconout ; Alias 
+            
+dbgstrout:  ; print string pointed to by IY
+            ld a, (iy+0)
+            cp 0
+            ret z
+            ld c, a          
+            call dbgconout             
+            inc iy 
+            jr dbgstrout           
+            
+; debug functions (ideally to be removed in final version, if we ever get that far!)
 outwordhex: ; print the word in HL as a four-char hex value
             ld a, h
             call outcharhex
@@ -493,9 +536,9 @@ outcharhex: ; print byte in A as two-char hex value
 
 crlf:
             ld c, 0x0d
-            call conout
+            call dbgconout
             ld c, 0x0a
-            call conout
+            call dbgconout
             ret
 
 outnibble:  and 0x0f
@@ -504,11 +547,39 @@ outnibble:  and 0x0f
             add 0x07
 numeral:    add 0x30
             ld c, a
-            call conout
+            call dbgconout
             ret
+            
+            
+outhexblank: 
+            call outcharhex            
+outblank:   ld c, ' '
+            jp dbgconout 
+            ; dbgconout will return             
+            
+printdisk:   
+            call dbgstrout ; Print message passed in IY 
+            ld a,(curdisk)
+            call outhexblank
+            ld a,(curtrack)
+            call outhexblank
+            ld a,(cursector)
+            call outhexblank
+            ld a,(curdmaaddr+1)
+            call outcharhex
+            ld a,(curdmaaddr)
+            call outhexblank                        
+            ret 
+            
+            
+readmsg:    db "[RD ", 0
+writemsg:   db "[WR ", 0          
+
+          
+  endif           
 
 bootmsg:    db 0DH,"CP/M BIOS (Will Sowerbutts, 2013-11-05)",0DH,0AH
-            db "VGA and PS/2 Version (Thomas Hornschuh, 2016-01-24)",0DH,0AH
+            db "VGA and PS/2 Version (Thomas Hornschuh, 2016-01-25)",0DH,0AH
             db "CP/M 2.2 Copyright 1979 (c) by Digital Research",0DH,0AH,0
 ;; wbootmsg:   db "WBOOT ", 0
 ;; readmsg:    db "[RD ", 0
@@ -567,9 +638,8 @@ endm
  ps2conin: ; BIOS conin for  PS/2 keyboard 
           ld a,(convValid) ; check if we have a converted ASCII code  
           or a; set flags
-          jr nz,ps2con1; Yes...
-          call ps2do  ; check  for input and process it 
-           
+          jr nz,ps2con1; Yes...         
+          call ps2do  ; check  for input and process it          
           jr ps2conin ; loop again 
           
           ;return char 

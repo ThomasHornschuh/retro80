@@ -16,7 +16,7 @@ def readimg(filename, size, strip=0):
 # Assembled CPM image has a 17 entry jump table at the end we need to strip off
 
 cpm_image = readimg("zout/cpm22.cim", 11*512, 17*3)
-bios_image = readimg("zout/cbios.cim", 2600)
+bios_image = readimg("zout/cbios.cim", 2709)
 mem_image = cpm_image + bios_image
 open("cpm.bin", 'wb').write(mem_image)
 
