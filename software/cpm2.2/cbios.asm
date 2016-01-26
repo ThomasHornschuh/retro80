@@ -15,13 +15,22 @@
 ;-----------------------------------------------------------
                 ; TH: BIOS Base Address 
 bios equ 0F500H ; Change this if BIOS does not fit anymore 
+                ; Check symbol biosend in listing that there
+                ; is no wraparound behind ff 
+                ; check also symbol ccp and assemble
+                ; cpm22.asm with org set to calculated ccp 
 ;-----------------------------------------------------------
 
-VGACONS equ 1 ; Enable VGA and PS/2 Console 
-L_GERMAN equ 1 ; Keyboard Layout German 
-CRTPAGE equ 0EH ; 
-
-DISKDEBUG equ 0 ; Disk I/O Debug output enable 
+;-----------------------------------------------------------
+; TH: conditional defines 
+;-----------------------------------------------------------
+MPM         equ 0 ; This is not a MP/M BIOS 
+VGACONS     equ 1 ; Enable VGA and PS/2 Console 
+L_GERMAN    equ 1 ; Keyboard Layout German 
+DISKDEBUG   equ 0 ; Disk I/O Debug output enable 
+;-----------------------------------------------------------
+; end conditional defines 
+;-----------------------------------------------------------
 
 ; IO Ports 
 UART0_STATUS  equ 0x0000 ; [7: RX READY] [6: TX BUSY] [6 unused bits]
@@ -33,6 +42,10 @@ MMU_FRAMELO   equ 0xFD
 PS2_CONTROL   equ 040H ; PS2 Control and status Port
 PS2_DATA      equ 041H ; PS2 Data Port 
 
+; Page mapping of rame buffer 
+CRTPAGE equ 0EH ; 
+
+
 msize   equ 64 ; KB of system RAM
 
 
@@ -40,8 +53,8 @@ msize   equ 64 ; KB of system RAM
 ccp  equ bios - 01600H ; CP/M CCP+BDOS are 1600H Bytes in size 
 bdos equ ccp+0x0806
 
-ccpPage equ  (high(ccp) and 0F0H) shl 8 ; e.g when CCP starts at DF00 then ccpPage will be D0 
 
+ccpPage equ  (high(ccp) and 0F0H) shl 8 ; e.g when CCP starts at DF00 then ccpPage will be D000 
 sectorOffset equ ( ccp-ccpPage + 4096 ) / 128 ; Offset of CP/M image in system track  
 
 ; end  TH 

@@ -18,6 +18,8 @@ CONINSWITCH   equ 1 ;   Enable  Console switch funktion for UART0
 CONFPS2       equ 1 ;   PS/2 Keyboard support
 L_GERMAN      equ 1 ;   German Layout  
 MMU_SECTION   equ 1 ;   Enable MMU critical section handling 
+MPM           equ 1 ;   we are MP/M   
+DISKDEBUG     equ 0 ; 
 
 
 if MMU_SECTION 
@@ -419,6 +421,10 @@ leaveMMU:
 ; partly moved to banked.asm 
 
 read:       ; read from our RAM disk
+        if DISKDEBUG
+            ld iy, readmsg
+            call printdisk
+         endif  
             call swtuser  ; bank switch to user segment
             
             call mapmmu
@@ -432,6 +438,10 @@ docopy:     ld bc, 0x80 ; transfer 128 bytes
             ret
 
 write:      ; write to our RAM disk
+         if DISKDEBUG
+            ld iy, writemsg
+            call printdisk
+          endif
             call swtuser
             call mapmmu
             ; HL now points to the location where our data is stored
@@ -455,39 +465,63 @@ mapmmu:     ; use MMU to map the physical page corresponding to the drive data
             ; we know PC is in Cxxx (!!) so we can't use that
             ; we have to avoid SP and the target DMA address
             ; SP >= 0x8000 -> use 0x2000 unless DMA is in 0x2000 in which case use 0x4000
-            ; SP  < 0x8000 -> use 0xA000 unless DMA is in 0xA000 in which case use 0x9000
+            ; SP  < 0x8000 -> use 0xA000 unless DMA is in 0xA000 in which case use 0x8000
+            
+           
             
             mmuEnter 0FFH ; "Owner" Disk system             
             ; turn on disk access LED
             in a, (GPIO_OUTPUT)
             set 3, a
             out (GPIO_OUTPUT), a
-
+            
+            ; TH: Additional check because DMA buffer can cross a page boundary 
+            ; CP/M allow the DMA buffer to be at any possible memory address  
+            ld hl,(curdmaaddr)
+            ld a,h 
+            and 0F0H 
+            ld d,a ; Store start page of current DMA in d             
+            ld bc,128 
+            add hl,bc ; Calculate End of DMA buffer 
+            ld a,h 
+            and 0F0H 
+            ld e,a ; store end page of current DMA in e 
+                        
             ld hl, 0    ; you can't read sp ...
-            add hl, sp  ; but you can add it to hl!
-            ; re-use l register
-            ld a, (curdmaaddr+1)
-            and 0xf0
-            ld l, a     ; store top 4 bits of DMA address in L
+            add hl, sp  ; but you can add it to hl!                                                 
             ld a, h     ; test top bit of SP
             and 0x80
             jr z, use_a0   ; top bit of SP is not set, SP is in low 32K
             ; top bit of SP is set, SP is in high 32K
-            ld a, l
+            ld a, d ; check conflict with DMA start 
             cp 0x20
             jr z, use_40
+            ld a, e  ; check conflict with DMA end 
+            cp 0x20 
+            jr z, use_40 
             ld a, 0x2
             jr foundframe
+            
 use_40:     ld a, 0x4
             jr foundframe
-use_a0:     ld a, l
+            
+use_a0:     ld a, d ; check conflict with DMA start 
             cp 0xa0
-            jr z, use_c0
-            ld a, 0xa
+            jr z, use_80
+            ld a, e  ; check conflict with DMA end 
+            cp 0xa0 
+            jr z, use_80
+            ld a, 0xa         
             jr foundframe
-use_c0:     ld a, 0x9 ; TH change from 0xC to 0x9 for MP/M 
+use_80:     ld a, 0x8 ; TH change from 0xC to 0x8 for MP/M 
             ; fall through to foundframe
 foundframe: ; selected frame in register a
+        if DISKDEBUG
+            push af 
+            call outcharhex
+            call crlf
+            pop af 
+         endif 
          
             out (MMU_PAGESEL), a ; select page frame
             and a ; clear carry flag (for rla)
@@ -846,7 +880,7 @@ mmuPanic:  db ' MMU hazard',0;
 ; then used again as the stack during interrupts
 sysvectors:  
 initmsg:    db 13, 10
-initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20162301,vga,ps2])", 0 ; MP/M print a CRLF for us
+initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20162501,vga,ps2])", 0 ; MP/M print a CRLF for us
           if ($ - sysvectors) < VECTOR_LENGTH
             ds (VECTOR_LENGTH - ($ - sysvectors))  ; fill up to 64 Bytes if needed 
           endif   
@@ -865,8 +899,7 @@ strout:     ; print string pointed to by HL
             ld c, a
             call dbgout
             inc hl
-            jr strout           
-            
+            jr strout       
 
 dbgout:     ; wait tx idle
             in a, (UART0_STATUS)
@@ -884,10 +917,6 @@ dbgwait:    ; wait tx idle again
 panic:      call strout
             hlt     
             
-            
-debugc equ 1 
-
-if debugc
 
 cstrout:   ; like strout but using XIOS conout, D points to console number
             ld a, (hl)
@@ -900,9 +929,14 @@ cstrout:   ; like strout but using XIOS conout, D points to console number
             pop hl 
             pop de 
             inc hl
-            jr cstrout  
+            jr cstrout 
             
+
             
+debugc equ 1 
+
+if debugc
+           
 ; print the byte in A as two hex nibbles
 outcharhex:
             push bc
@@ -929,6 +963,53 @@ numeral:    add 0x30 ; start at '0' (0x30='0')
             ld c, a
             call dbgout
             ret
+            
+        
+
+endif            
+
+if DISKDEBUG            
+     dbgconout equ dbgout ; Alias 
+            
+dbgstrout:  ; print string pointed to by IY
+            ld a, (iy+0)
+            cp 0
+            ret z
+            ld c, a          
+            call dbgconout             
+            inc iy 
+            jr dbgstrout    
+
+crlf:
+            ld c, 0x0d
+            call dbgconout
+            ld c, 0x0a
+            call dbgconout
+            ret
+
+outhexblank: 
+            call outcharhex            
+outblank:   ld c, ' '
+            jp dbgconout 
+            ; dbgconout will return             
+                        
+printdisk:   
+            call dbgstrout ; Print message passed in IY 
+            ld a,(curdisk)
+            call outhexblank
+            ld a,(curtrack)
+            call outhexblank
+            ld a,(cursector)
+            call outhexblank
+            ld a,(curdmaaddr+1)
+            call outcharhex
+            ld a,(curdmaaddr)
+            call outhexblank                        
+            ret 
+            
+            
+readmsg:    db "[RD ", 0
+writemsg:   db "[WR ", 0   
 
 endif             
 

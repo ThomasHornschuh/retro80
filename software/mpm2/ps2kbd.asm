@@ -56,7 +56,7 @@ ps2do:      in a,(PS2_CONTROL)
             and 01H ; check status bit 
             jr nz,ps2read ; -> data available 
             ; Else wait for next interrupt 
-        if xdos ; conditional compile - if we use MP/M than wait for Interrupt 
+        if MPM ; conditional compile - if we use MP/M than wait for Interrupt 
             ld c, xdos_flag_wait
             ld e, flag_ps2
             call xdos ; wait 
