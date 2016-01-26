@@ -106,15 +106,19 @@ ENDIF
 ENDIF
 
 	ld      (start1+1),sp	;Save entry stack
-	ld	a,($80)		;byte count of length of args
-	inc	a		;we can use this since args are space separated
-	neg
-	ld	l,a
-	ld	h,-1		;negative number
-	ld      de,-64		;Add on space for atexit() stack
-	add	hl,de
-	add     hl,sp
-	ld      sp,hl
+	;ld	a,($80)		;byte count of length of args
+	;inc	a		;we can use this since args are space separated
+	;neg
+	;ld	l,a
+	;ld	h,-1		;negative number
+	;ld      de,-64		;Add on space for atexit() stack
+	;add	hl,de
+	;add     hl,sp
+	;ld      sp,hl
+    ld hl,(6) ; Get BDOS entry point 
+    dec hl
+    dec hl 
+    ld sp,hl ; Set SP 
 	ld      (exitsp),sp
 
 ; Optional definition for auto MALLOC init
@@ -145,11 +149,13 @@ ENDIF
 	push	hl
 	ld	hl,$80
 	ld	a,(hl)
+    ld	c,a
 	ld	b,0
 	and	a
 	jr	z,argv_done
-	ld	c,a
-	add	hl,bc	;now points to the end
+	
+    add hl,bc ; hl now points to end of buffer      
+	    
 ; Try to find the end of the arguments
 argv_loop_1:
 	ld	a,(hl)
@@ -165,7 +171,7 @@ argv_loop_2:
 	cp	' '
 	jr	nz,argv_loop_3
 	;ld	(hl),0
-	inc	hl
+	inc	hl ; now hl points to start of argument 
 
 IF !DEFINED_noredir
 IF !DEFINED_nostreams
@@ -235,13 +241,13 @@ ENDIF
 ENDIF
 ENDIF
 
-	push	hl
+	push	hl ; Push arg start 
 	inc	b
-	dec	hl
+	dec	hl     ; move 1 char down 
 
 ; skip extra blanks
 argv_zloop:
-	ld	(hl),0
+	ld	(hl),0 ; replace space with null 
 	dec	c
 	jr	z,argv_done
 	dec	hl
