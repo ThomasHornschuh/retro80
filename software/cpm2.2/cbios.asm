@@ -42,7 +42,7 @@ MMU_FRAMELO   equ 0xFD
 PS2_CONTROL   equ 040H ; PS2 Control and status Port
 PS2_DATA      equ 041H ; PS2 Data Port 
 
-; Page mapping of rame buffer 
+; Page mapping of frame buffer 
 CRTPAGE equ 0EH ; 
 
 
@@ -70,14 +70,16 @@ biosstart:
             jp boot         ; cold start
 wboote:     jp wboot        ; warm start
      if VGACONS
-            jp ps2constat
-            jp ps2conin           
+            jp extconstat
+            jp extconin
+            jp extconout             
      else
             jp const        ; console status
             jp conin        ; console character in
+            jp conout       ; console character out
             
     endif         
-            jp conout       ; console character out
+            
             jp list         ; list character out
             jp punch        ; punch character out
             jp reader       ; reader character out
@@ -137,15 +139,15 @@ dpblk:
 
 ; bios functions follow
 boot:       
+            ld (iobyte), a ; Bootloader will pass iobyte in reg a 
             ld a,h ; HL will contain RAM Disk base page of boot disk, eg 02H 04H or 06H
             rra  ; div 2 
-            dec a ; -1 
-            ld (bootdisk),a 
-                        
-            ; perform standard CPM initialisation
+            dec a ; -1  now a contains drive number of boot disk 
+            ld (bootdisk),a             
+            cp ndisks  
+            jr c, boot1                                    
             xor a
-            ld (iobyte), a
-            ld (cdisk), a
+boot1:      ld (cdisk), a
           if VGACONS
             call crtinit
           endif   
@@ -591,8 +593,8 @@ writemsg:   db "[WR ", 0
           
   endif           
 
-bootmsg:    db 0DH,"CP/M BIOS (Will Sowerbutts, 2013-11-05)",0DH,0AH
-            db "VGA and PS/2 Version (Thomas Hornschuh, 2016-01-25)",0DH,0AH
+bootmsg:    db 0DH,0AH,0AH,"CP/M BIOS (Will Sowerbutts, 2013-11-05)",0DH,0AH
+            db "VGA and PS/2 Version (Thomas Hornschuh, 2016-01-27)",0DH,0AH
             db "CP/M 2.2 Copyright 1979 (c) by Digital Research",0DH,0AH,0
 ;; wbootmsg:   db "WBOOT ", 0
 ;; readmsg:    db "[RD ", 0
@@ -625,15 +627,32 @@ endm
 
  include ../mpm2/vgabasic.asm 
  
-  conout equ crtconout ; Map conout label 
+  
  
   crtinit: 
        ld a, CRTPAGE 
        ld (mapPage),a
-       call initvga  
+       ld a,(iobyte)
+       and 03H       
+       jp z, initvga ; If tty boot than full init of vga 
+       ; else only init the scrpb 
+       ld ix,scrpb0 
+       ld hl,PhysScreenPage 
+       call initscrpb
+       ; init cursor from hardware registers 
+       in a,(CursorXReg)
+       dec a 
+       ld (ix+cursX),a 
+       in a,(CursorYReg)
+       ld (ix+cursY),a        
+       ret 
  
- 
-  crtconout: ; BIOS conout for VGA 
+  conout: 
+  extconout: ; BIOS conout for VGA 
+       ld a,(iobyte)
+       and 03H
+       jp z, uconout ; IOBYTE 0 -> TTY
+       ; Anything else is seen as crt 
        push ix
        ld ix,scrpb0 
        call vgaconout
@@ -648,7 +667,13 @@ endm
    include ../mpm2/lger.asm 
  endif
  
- ps2conin: ; BIOS conin for  PS/2 keyboard 
+ extconin:
+          ld a,(iobyte)
+          and 03H
+          jp z, conin ; IOBYTE 0 -> TTY
+          ; Anything else is seen as crt  
+ ps2conin:
+          ; BIOS conin for  PS/2 keyboard 
           ld a,(convValid) ; check if we have a converted ASCII code  
           or a; set flags
           jr nz,ps2con1; Yes...         
@@ -661,7 +686,12 @@ endm
           ld a,(converted)
           ret 
           
- ps2constat: ; BIOS constat for PS/2 keyboard   
+ extconstat:
+          ld a,(iobyte)
+          and 03H
+          jp z, const ; IOBYTE 0 -> TTY
+          ; Anything else is seen as crt  
+          ; BIOS constat for PS/2 keyboard   
           in a, (PS2_CONTROL)
           and 01H ; check status bit 
           call nz, ps2read ; if data availble process it 
