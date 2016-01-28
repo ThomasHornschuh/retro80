@@ -264,6 +264,7 @@ begin
 		DBIn => cpu_data_out,
 		AdrBus => physical_address(11 downto 0),
 		ENA => vram_cs,
+		RDEN => req_read,
 		WREN => req_write,
 		clkA => clk ,
 		IO_cs => vga_cs,

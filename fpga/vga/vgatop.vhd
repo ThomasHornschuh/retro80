@@ -58,6 +58,7 @@ entity vgatop is
            DBIn : in  STD_LOGIC_VECTOR (7 downto 0);
            AdrBus : in  STD_LOGIC_VECTOR (11 downto 0);
 			  ENA : in  STD_LOGIC;
+			  RDEN : in STD_LOGIC;
            WREN : in  STD_LOGIC;
 			  clkA : in STD_LOGIC; -- CPU Bus  Clock
 			  IO_cs : in STD_LOGIC; -- IO Register Chip Select
@@ -131,10 +132,10 @@ COMPONENT VideoRam
 	PORT(
 		DBIn : IN std_logic_vector(7 downto 0);
 		AdrBus : IN std_logic_vector(11 downto 0);
+		clkA : IN std_logic;
 		ENA : IN std_logic;
 		WREN : IN std_logic;
-	   clkA : in STD_LOGIC; 
-		
+		RDEN : IN std_logic;
 		VAdr : IN std_logic_vector(11 downto 0);
 		CLK : IN std_logic;          
 		DBOut : OUT std_logic_vector(7 downto 0);
@@ -172,6 +173,7 @@ begin
 		AdrBus => AdrBus,
 		ENA => ENA,
 		WREN => WREN,
+		RDEN => RDEN,
 		clkA => clkA,
 		
 		VAdr => VideoAdr,

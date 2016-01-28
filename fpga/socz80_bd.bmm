@@ -12,8 +12,8 @@
 
 ADDRESS_SPACE bram_block RAMB16 [0x00000000:0x00000FFF]
     BUS_BLOCK
-        rom/Mram_byte_rom2 RAMB16 [3:0] [0:4095] PLACED = X1Y6;
-        rom/Mram_byte_rom1 RAMB16 [7:4] [0:4095] PLACED = X0Y24;
+        rom/Mram_byte_rom2 RAMB16 [3:0] [0:4095] PLACED = X0Y12;
+        rom/Mram_byte_rom1 RAMB16 [7:4] [0:4095] PLACED = X1Y24;
     END_BUS_BLOCK;
 END_ADDRESS_SPACE;
 

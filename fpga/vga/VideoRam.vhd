@@ -35,15 +35,18 @@ use STD.textio.all;
 
 entity VideoRam is
    generic (RamFileName : string := "");
-    Port ( DBOut : out  STD_LOGIC_VECTOR (7 downto 0);
+    Port ( -- CPU Interface
+	        DBOut : out  STD_LOGIC_VECTOR (7 downto 0);
            DBIn : in  STD_LOGIC_VECTOR (7 downto 0);
            AdrBus : in  STD_LOGIC_VECTOR (11 downto 0);
 			  clkA : in STD_LOGIC; -- Clock for RAM Port A
            ENA : in  STD_LOGIC;
            WREN : in  STD_LOGIC;
+			  RDEN : in  STD_LOGIC;
+			  
+			  -- Video Controller Interface 
 			  VAdr : in  STD_LOGIC_VECTOR (11 downto 0);
-			  VData : out  STD_LOGIC_VECTOR (7 downto 0);
-        
+			  VData : out  STD_LOGIC_VECTOR (7 downto 0);        
 			  CLK : in  STD_LOGIC );
 end VideoRam;
 
@@ -67,7 +70,7 @@ begin
       hread (RamFileLine, byte);
 	   r(I) :=  byte;
 	 else
- 	   r(I) := X"40";
+ 	   r(I) := X"20";
     end if;		
   end loop;
   return r; 
@@ -75,23 +78,27 @@ end function;
   
   
   signal ram : tRam := InitFromFile;
-  signal ar : STD_LOGIC_VECTOR (11 downto 0);
+--  signal ar : STD_LOGIC_VECTOR (11 downto 0);
 
 begin
 
 
   process(clkA) begin
     if rising_edge(clkA) then
-		 if ena = '1'  and  wren = '1' then
+		 if ena = '1' and wren='1'  then
 			  ram(to_integer(unsigned(AdrBus))) <= DBIn;
-		 end if;
-       ar <= AdrBus; -- Latch Address
+			  DBOut <=DBIn;
+		 else
+           DBOut <= ram(to_integer(unsigned(AdrBus)));
+       end if; 			  
+		 
+      -- ar <= AdrBus; -- Latch Address
 		 			  
 	  end if;
   
   end process;
 
-  DBOut <= ram(to_integer(unsigned(ar))); -- Always output 
+ -- DBOut <= ram(to_integer(unsigned(ar))); -- Always output 
 
   process(clk) begin
     if rising_edge(clk) then 
