@@ -68,7 +68,6 @@ end vgatop;
 
 architecture Behavioral of vgatop is
   
-signal RESET,RES1 : STD_LOGIC;
 
 signal clk25 : std_logic;
 signal RomAdr : STD_LOGIC_VECTOR(11 DOWNTO 0);
@@ -182,7 +181,7 @@ begin
 	);
   
   Inst_vga80x40: vga80x40 PORT MAP(
-		reset => reset,
+		reset => I_RESET,
 		clk25MHz => clk25,
 		TEXT_A => VideoAdr,
 		TEXT_D => VideoData,
@@ -228,30 +227,13 @@ begin
 	-- Synchronous logic
 	
 	
-
--- RESET circuit
-  -- Two FF (RES1=>RESET=>) behind each other
-  -- assynchronous assert of RESET when I_RESET is asserted
-  -- synchronous clear of RESET in two clocks
-  
-  process(clk25,I_RESET) begin
-   
-	 if I_RESET = '1' then
-	   RES1 <= '1';
-	   RESET <= '1';
-	 elsif rising_edge(clk25) then
-      RES1 <= '0';
-		RESET <= RES1;
-	 end if;	
-    
-  end process;
 	
 -- I/O Register Processing
   process(ClkA) begin
 	
 	 if rising_edge(ClkA) then
 	   if I_RESET='1' then	
-			crx_oreg    <=  "00000000";
+			crx_oreg    <=  "00000001";
 			cry_oreg    <=  "00000000";
 			ctl_oreg    <=  "11110010";
 		elsif IO_cs='1' then	

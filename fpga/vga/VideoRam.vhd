@@ -78,7 +78,7 @@ end function;
   
   
   signal ram : tRam := InitFromFile;
---  signal ar : STD_LOGIC_VECTOR (11 downto 0);
+
 
 begin
 
@@ -86,19 +86,16 @@ begin
   process(clkA) begin
     if rising_edge(clkA) then
 		 if ena = '1' and wren='1'  then
-			  ram(to_integer(unsigned(AdrBus))) <= DBIn;
-			  DBOut <=DBIn;
+			ram(to_integer(unsigned(AdrBus))) <= DBIn;
+			DBOut <=DBIn;
 		 else
-           DBOut <= ram(to_integer(unsigned(AdrBus)));
-       end if; 			  
-		 
-      -- ar <= AdrBus; -- Latch Address
-		 			  
+         DBOut <= ram(to_integer(unsigned(AdrBus)));
+       end if; 			  		 			  
 	  end if;
   
   end process;
 
- -- DBOut <= ram(to_integer(unsigned(ar))); -- Always output 
+ 
 
   process(clk) begin
     if rising_edge(clk) then 

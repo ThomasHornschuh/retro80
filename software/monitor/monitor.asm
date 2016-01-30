@@ -4,37 +4,108 @@
 ; Wishlist:
 ;    dm could print an extra space after 8th char, and chars in ASCII on the right hand side, a la hexdump -C
 
+;-----------------------------------------------------------
+; TH: conditional defines 
+;-----------------------------------------------------------
+MPM         equ 0 ; This is not a MP/M BIOS 
+VGACONS     equ 1 ; Enable VGA and PS/2 Console 
+L_GERMAN    equ 1 ; Keyboard Layout German 
+DISKDEBUG   equ 0 ; Disk I/O Debug output enable 
+LOADTPA     equ 1 ; Assemble Monitor to run in CP/M TPA (100H)
+NOHELP      equ 1 ; Reduce help messages 
+;-----------------------------------------------------------
+; end conditional defines 
+;-----------------------------------------------------------
+
+
 ; hardware register addresses
-UART0_STATUS:  equ 0x00 ; [7: RX READY] [6: TX BUSY] [6 unused bits]
-UART0_DATA:    equ 0x01
-UART1_STATUS:  equ 0x28
-UART1_DATA:    equ 0x29
-STACK_INIT:    equ 0xF000 ; stack (grows downwards, runtime movable)
-INPUT_BUFFER:  equ 0xEF00 ; input buffer (grows upwards, runtime movable)
+UART0_STATUS  equ 0x00 ; [7: RX READY] [6: TX BUSY] [6 unused bits]
+UART0_DATA    equ 0x01
+UART1_STATUS  equ 0x28
+UART1_DATA    equ 0x29
 
-SPI_CHIPSELECT: equ 0x18
-SPI_STATUS:     equ 0x19
-SPI_TX:         equ 0x1a
-SPI_RX:         equ 0x1b
-SPI_DIVISOR:    equ 0x1c
-GPIO_INPUT:     equ 0x20
-GPIO_OUTPUT:    equ 0x21
 
-MMU_SELECT:    equ 0xF8   ; page table entry selector
-MMU_PAGE17:    equ 0xFA   ; magic I/O port that accesses physical memory
-MMU_PERM:      equ 0xFB   ; permission bits [6 unused bits] [WRITE] [READ]
-MMU_FRAMEHI:   equ 0xFC   ; high byte of frame number
-MMU_FRAMELO:   equ 0xFD   ; low byte of frame number
-MMU_PTR_VAL0:  equ 0xFC
-MMU_PTR_VAL1:  equ 0xFD
-MMU_PTR_VAL2:  equ 0xFE
-MMU_PTR_VAL3:  equ 0xFF
+SPI_CHIPSELECT equ 0x18
+SPI_STATUS     equ 0x19
+SPI_TX         equ 0x1a
+SPI_RX         equ 0x1b
+SPI_DIVISOR    equ 0x1c
+GPIO_INPUT     equ 0x20
+GPIO_OUTPUT    equ 0x21
 
-FLASH_MAN:     equ 0xc2
-FLASH_DEV1:    equ 0x20
-FLASH_DEV2:    equ 0x17
+MMU_SELECT    equ 0xF8   ; page table entry selector
+MMU_PAGE17    equ 0xFA   ; magic I/O port that accesses physical memory
+MMU_PERM      equ 0xFB   ; permission bits [6 unused bits] [WRITE] [READ]
+MMU_FRAMEHI   equ 0xFC   ; high byte of frame number
+MMU_FRAMELO   equ 0xFD   ; low byte of frame number
+MMU_PTR_VAL0  equ 0xFC
+MMU_PTR_VAL1  equ 0xFD
+MMU_PTR_VAL2  equ 0xFE
+MMU_PTR_VAL3  equ 0xFF
 
-RAM_MB: equ 8
+FLASH_MAN     equ 0xc2
+FLASH_DEV1    equ 0x20
+FLASH_DEV2    equ 0x17
+
+PS2_CONTROL   equ 040H ; PS2 Control and status Port
+PS2_DATA      equ 041H ; PS2 Data Port 
+
+RAM_MB equ 8
+
+;Global Adresses 
+STACK_INIT    equ 0xF000 ; stack (grows downwards, runtime movable)
+INPUT_BUFFER  equ 0xEF00 ; input buffer (grows upwards, runtime movable)
+if VGACONS
+    if LOADTPA
+       SCPB equ 80H
+    else        
+       SCPB          equ  INPUT_BUFFER-scpbsize
+    endif   
+    IOBYTE equ 03H ; CP/M compatible iobyte 
+endif 
+
+;constants 
+if VGACONS 
+  TAB equ ' ' ; VGA does not support TAB character
+else   
+  TAB equ 9 ; Tab character
+endif   
+
+if LOADTPA
+        bdos equ 05H 
+        org 100H
+warmboot:
+        ; Check if we run with MP/M 
+        ld c,12  ; BDOS get version 
+        call bdos
+        ld a,h 
+        or a ; set flags 
+        jr z, versok
+        ld c,9 
+        ld de,msgversion
+        call bdos 
+        jp 0 ; Terminate 
+msgversion: 
+        db 'This program cannot run under MP/M',0DH,0AH,'$'
+        
+versok: 
+        ; When loading in TPA SP and IY (INPUT_BUFFER) will be calculated
+        ; dynamically 
+        ld hl,(bdos+1) ; Get BDOS Entry point - highest allowed address 
+        dec hl 
+        ld sp, hl   ; load stack pointer to point to 1 byte past top of memory
+        ld bc, -256 
+        add hl,bc ; HL=HL-256 
+        push hl
+        pop iy ; IY will hold the input buffer 
+       
+  if VGACONS
+       call initvga
+       call ps2start 
+  endif        
+        
+        
+else         
 
         ; on reset, the MMU maps us at 0x0000 for 4K,
         ; however it's really useful to have access to this
@@ -61,7 +132,10 @@ RAM_MB: equ 8
         out (MMU_PERM), a
         ; jump to monitor in new location
         jp boot
-        org 0xF000 + $
+;---------------------------------------------------  
+;       from here on we are at F000      
+        org 0F000H + $
+;---------------------------------------------------           
 boot:
         ; use MMU to map SDRAM into page 0
         xor a
@@ -77,7 +151,11 @@ boot:
 
         ; no; it's a cold boot
         ld sp, 0x1000
-
+       
+   if VGACONS
+        ld iy, INPUT_BUFFER ; set default input buffer location 256 bytes below top of stack
+        call initvga 
+   endif    
         ld hl, coldbootmsg
         call outstring
 
@@ -130,6 +208,12 @@ cbnextpage:
         inc a
         out (MMU_FRAMELO), a
 
+if VGACONS
+       ld a,01H
+       ld (IOBYTE),a ; SET IO Byte to crt 
+endif        
+         
+
         ; fall through to warm boot process
 warmboot:
         ld sp, STACK_INIT   ; load stack pointer to point to 1 byte past top of memory
@@ -140,7 +224,7 @@ warmboot:
         ld (0), a
         ld hl, boot
         ld (1), hl
-
+endif
         ; turn off bright LEDs!
         xor a
         out (GPIO_OUTPUT), a
@@ -398,10 +482,14 @@ rb1b:   sla c   ; shift B left one bit, top bit to carry, 0 to bottom bit
 rb1c:   inir ; read 256 bytes from port MMU_PAGE17 to (HL), incrementing HL as we go
         dec d
         jr nz, rb1c ; repeat until 16*256=0x1000 bytes read
+   if VGACONS        
+        call unmapvga ; clean up before going to boot 
+   endif      
         pop ix ; load/boot vector
         pop hl ; we enter the bootstrap with base page of RAM disk in HL
         jp (ix) ; jump into bootstrap
         ; bootstrap can never return
+        ;
 rbfail: ld hl, rboot_fail_msg
         call outstring
         jp monitor_loop
@@ -455,7 +543,7 @@ mmunextpage:
         call outcharhex
         ld a, 0xff
         call outcharhex
-        ld a, '\t'
+        ld a, TAB 
         call outchar
         ; physical address
         in a, (MMU_FRAMEHI)
@@ -476,9 +564,9 @@ mmunextpage:
         call outcharhex
         ld a, 'F'
         call outchar
-        ld a, '\t'
+        ld a, TAB
         call outchar
-        ld a, '\t'
+        ld a, TAB
         call outchar
         ; permissions
         in a, (MMU_PERM)
@@ -1146,7 +1234,7 @@ numeral:add 0x30 ; start at '0' (0x30='0')
 
 ; outchar: Wait for UART TX idle, then print the char in A
 ; destroys: AF
-outchar:
+uoutchar:
         push bc
         ld b, a
         ; wait for transmitter to be idle
@@ -1243,10 +1331,10 @@ isbspace:
 
 ; incharwait: Wait for UART RX, return character read in A
 ; destroys: A
-incharwait:
+uincharwait:
         in a, (UART0_STATUS)
         bit 7, a
-        jr z, incharwait   ; loop while no character received
+        jr z, uincharwait   ; loop while no character received
         in a, (UART0_DATA)
         ret
 
@@ -1306,51 +1394,114 @@ phshift:
         ld e, a ; move A into C
         inc hl
         jr parsemorehex
+        
+ 
+if VGACONS 
+        
+ include vgamini.asm 
+ include ps2mini.asm  
+ if L_GERMAN 
+   include ../mpm2/lger.asm 
+ endif
 
-coldbootmsg:        db "\r\nCold boot: zeroing RAM ", 0
-greeting:           db "\r"
-                    db "                    ___   ___  \r\n"
-                    db " ___  ___   ___ ___( _ ) / _ \\ \r\n"
-                    db "/ __|/ _ \\ / __|_  / _ \\| | | |\r\n"
-                    db "\\__ \\ (_) | (__ / / (_) | |_| |\r\n"
-                    db "|___/\\___/ \\___/___\\___/ \\___/ \r\n"
-                    db "Z80 ROM Monitor (Will Sowerbutts, 2013-12-12)\r\n", 0
-monitor_prompt:     db "Z80> ", 0
-what_msg:           db "Error reduces\r\nYour expensive computer\r\nTo a simple stone.\r\n", 0
-invalid_msg:        db "Errors have occurred.\r\nWe won't tell you where or why.\r\nLazy programmers.\r\n", 0 
-mmu_header_msg:     db "Virtual (F8)\tPhysical (FC FD)\tFlags (FB)\r\n", 0
+outchar: 
+       push ix 
+       push hl 
+       push de 
+       push bc       
+       ld c,a  
+       ld ix,SCPB 
+       call vgaconout 
+       pop bc 
+       pop de 
+       pop hl 
+       pop ix 
+       ret 
+       
+incharwait: 
+
+          ; BIOS conin for  PS/2 keyboard  
+          push ix    
+          push hl 
+          push bc 
+          push de           
+          ld ix,SCPB 
+incl1:    ld a,(ix+convValid) ; check if we have a converted ASCII code  
+          or a; set flags
+          jr nz,ps2con1; Yes...                  
+          call ps2do  ; check  for input and process it                     
+          jr incl1 ; loop again       
+         ;return char 
+ps2con1:  ld a,0
+          ld (ix+convValid),a ; clear semaphore  
+          ld a,(ix+converted)
+          pop de 
+          pop bc 
+          pop hl
+          pop ix 
+          ret           
+ 
+else 
+  outchar equ uoutchar ; Alias 
+  incharwait equ uincharwait ; Alias 
+endif         
+        
+        
+
+
+if LOADTPA
+greeting:           db "Z80 ROM Monitor (Will Sowerbutts, 2013-12-12)",13,10, 0
+else 
+coldbootmsg:        db 13,10, "Cold boot: zeroing RAM ", 0
+greeting:           db 13 
+                    db "                    ___   ___  ",13,10
+                    db " ___  ___   ___ ___( _ ) / _ \ ",13,10
+                    db "/ __|/ _ \ / __|_  / _ \| | | |",13,10
+                    db "\__ \ (_) | (__ / / (_) | |_| |",13,10
+                    db "|___/\___/ \___/___\___/ \___/ ",13,10
+                    db "Z80 ROM Monitor (Will Sowerbutts, 2013-12-12)",13,10, 0
+endif 
+
+monitor_prompt:     db "Z80>", 0
+what_msg:           db "Error",13,10, 0
+invalid_msg:        db "Errors have occurred.",13,10, 0 
+mmu_header_msg:     db "Virtual (F8)",TAB,"Physical (FC FD)",TAB,"Flags (FB)",13,10, 0
 mmu_read_msg:       db "READ ", 0
 mmu_write_msg:      db "WRITE ", 0
 mmu_ptr_msg:        db "17th Page Pointer (FA) = ",0
 rboot_msg:          db "Loading stage 2 bootstrap from RAM disk to ", 0
-rboot_fail_msg:     db "Bad magic number. Gentlemen, please check your RAM disks.\r\n", 0
+rboot_fail_msg:     db "Bad magic number.",13,10, 0
 sp_msg:             db "SP=", 0
 buf_msg:            db "BUF=", 0
 type_check_msg:     db "Checking SPI flash type: ", 0
-type_check_ok_msg:   db " (OK)\r\n", 0
-type_check_fail_msg: db " FAIL! :(\r\n", 0
+type_check_ok_msg:   db " (OK)",13,10, 0
+type_check_fail_msg: db " FAIL! :(",13,10, 0
 erasewarn_msg:      db "Erase RAM disk starting at page ", 0
 readwarn1_msg:      db "Read RAM disk starting at page ", 0
 readwarn2_msg:      db " from flash page ", 0
 writewarn1_msg:     db "Write RAM disk starting at page ", 0
 writewarn2_msg:     db " to flash page ", 0
 genwarn_msg:        db " (y/n)?", 0
-verifybad_msg:      db "Flash write verify failed :(\r\n", 0
-help_msg:           db "Commands:\r\n"
-                    db "\tdm addr [len]\t\t\tdisplay memory contents from addr for len (default 1) bytes\r\n"
-                    db "\twm addr val [val...]\t\twrite bytes to memory starting at addr\r\n"
-                    db "\tcp src dst len\t\t\tcopy len bytes from src to dst\r\n"
-                    db "\trun addr\t\t\trun code at addr\r\n"
-                    db "\tin addr\t\t\t\tread I/O port at addr, display result\r\n"
-                    db "\tout addr val [val...]\t\twrite I/O port at addr with val\r\n"
-                    db "\tmmu\t\t\t\tshow MMU state\r\n"
-                    db "\tsp [addr]\t\t\tshow stack pointer (and set to addr)\r\n"
-                    db "\tbuf [addr]\t\t\tshow input buffer (and set to addr)\r\n"
-                    db "\trboot page\t\t\tBoot from RAM disk\r\n"
-                    db "\trerase [page]\t\t\tErase RAM disk\r\n"
-                    db "\trread [page] [flashpage]\tRead RAM disk from SPI flash\r\n"
-                    db "\trwrite [page] [flashpage]\tWrite RAM disk to SPI flash\r\n"
-                    db "\t@[cmd]\t\t\t\tPerform command without echo or terminal handling (bulk operations)\r\n"
+verifybad_msg:      db "Flash write verify failed :",13,10, 0
+help_msg:           db "Commands:",13,10
+    if NOHELP
+                    db "dm,wm,cp,run,in,out,mmu,sp,buf,rboot,rerase,rread,rwrite,@[cmd]",13,10  
+    else 
+                    db " dm addr [len]  display memory contents from addr for len (default 1) bytes",13,10 
+                    db " wm addr val [val...]  write bytes to memory starting at addr",13,10
+                    db " cp src dst len   copy len bytes from src to dst",13,10
+                    db " run addr   run code at addr",13,10
+                    db " in addr    read I/O port at addr, display result",13,10
+                    db " out addr val [val...]  write I/O port at addr with val",13,10
+                    db " mmu    show MMU state",13,10
+                    db " sp [addr]   show stack pointer (and set to addr)",13,10
+                    db " buf [addr]   show input buffer (and set to addr)",13,10
+                    db " rboot page   Boot from RAM disk",13,10
+                    db " rerase [page]   Erase RAM disk",13,10
+                    db " rread [page] [flashpage] Read RAM disk from SPI flash",13,10
+                    db " rwrite [page] [flashpage] Write RAM disk to SPI flash",13,10
+                    db " @[cmd]    Perform command without echo or terminal handling (bulk operations)",13,10
+    endif                 
                     db 0
 cmd_rboot:          db "rboot ", 0
 cmd_buf:            db "buf", 0   ; no space at end (arg is optional)
@@ -1384,6 +1535,7 @@ cmd_table:
                     dw cmd_rread, do_rread
                     dw cmd_rwrite, do_rwrite
                     dw 0 ; terminate command table
-
+if LOADTPA = 0
 ; pad to 4K
                     ds 0x10000 - $, 0xfe  ; this will be negative when the ROM exceeds 4K so the assembler will alert us to our excess.
+endif 

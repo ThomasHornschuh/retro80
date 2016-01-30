@@ -8,7 +8,7 @@
 ;  cpmtools package
 
 ; Adaptions TH 24.01.2016: Include PS/2 Keyboard and  CRT Video Display Support
-; Needs adapated SOCZ80 Hardware
+; Needs adapted SOCZ80 Hardware
 
     .z80 
 

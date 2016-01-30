@@ -268,7 +268,7 @@ begin
 		WREN => req_write,
 		clkA => clk ,
 		IO_cs => vga_cs,
-		I_RESET => reset_button
+		I_RESET => system_reset
 	);
 	 
 	
