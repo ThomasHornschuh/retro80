@@ -11,7 +11,7 @@ MPM         equ 0 ; This is not a MP/M BIOS
 VGACONS     equ 1 ; Enable VGA and PS/2 Console 
 L_GERMAN    equ 1 ; Keyboard Layout German 
 DISKDEBUG   equ 0 ; Disk I/O Debug output enable 
-LOADTPA     equ 1 ; Assemble Monitor to run in CP/M TPA (100H)
+LOADTPA     equ 0 ; Assemble Monitor to run in CP/M TPA (100H)
 NOHELP      equ 1 ; Reduce help messages 
 ;-----------------------------------------------------------
 ; end conditional defines 
@@ -53,15 +53,17 @@ PS2_DATA      equ 041H ; PS2 Data Port
 RAM_MB equ 8
 
 ;Global Adresses 
-STACK_INIT    equ 0xF000 ; stack (grows downwards, runtime movable)
-INPUT_BUFFER  equ 0xEF00 ; input buffer (grows upwards, runtime movable)
+STACK_INIT    equ 1000H ; stack (grows downwards, runtime movable)
+INPUT_BUFFER  equ STACK_INIT-256 ; input buffer (grows upwards, runtime movable)
 if VGACONS
     if LOADTPA
        SCPB equ 80H
-    else        
-       SCPB          equ  INPUT_BUFFER-scpbsize
+    else
+       SCPB equ 80H     
+      ; SCPB          equ  INPUT_BUFFER-scpbsize
     endif   
-    IOBYTE equ 03H ; CP/M compatible iobyte 
+    IOBYTE equ 03H ; CP/M compatible iobyte an address 03H 
+    
 endif 
 
 ;constants 
@@ -70,6 +72,9 @@ if VGACONS
 else   
   TAB equ 9 ; Tab character
 endif   
+
+
+
 
 if LOADTPA
         bdos equ 05H 
@@ -134,7 +139,7 @@ else
         jp boot
 ;---------------------------------------------------  
 ;       from here on we are at F000      
-        org 0F000H + $
+        phase 0F000H + $
 ;---------------------------------------------------           
 boot:
         ; use MMU to map SDRAM into page 0
@@ -150,6 +155,10 @@ boot:
         jr z, warmboot ; yes! it's a warm boot then.
 
         ; no; it's a cold boot
+        ; wait for SD controller to become ready 
+sdwait: in a, (GPIO_INPUT)
+        and 80H 
+        jr nz, sdwait 
         ld sp, 0x1000
        
    if VGACONS
@@ -218,6 +227,9 @@ endif
 warmboot:
         ld sp, STACK_INIT   ; load stack pointer to point to 1 byte past top of memory
         ld iy, INPUT_BUFFER ; set default input buffer location 256 bytes below top of stack
+   if VGACONS       
+        call initvga 
+   endif          
 
         ; put a reset vector in place to jump back into us
         ld a, 0xc3 ; jmp instruction
@@ -1537,5 +1549,7 @@ cmd_table:
                     dw 0 ; terminate command table
 if LOADTPA = 0
 ; pad to 4K
-                    ds 0x10000 - $, 0xfe  ; this will be negative when the ROM exceeds 4K so the assembler will alert us to our excess.
+usedbytes           equ $-0F000H 
+                    ds 1000H - usedbytes  ; this will be negative when the ROM exceeds 4K so the assembler will alert us to our excess.
+lastbyte:                    
 endif 

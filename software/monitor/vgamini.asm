@@ -110,9 +110,9 @@ endm
 unmapVPage macro            
         ld a, mapPage
         out (vMMUPageSel),a
-        ld a,(ix+FrameSaveL)
+        ld a,0 ; (ix+FrameSaveL)
         out (vMMUFrameL),a
-        ld a,(ix+FrameSaveH)
+        ld a, mapPage shl 4 ;  (ix+FrameSaveH)
         out (vMMUFrameH),a
        
 endm        
@@ -385,9 +385,13 @@ unmapvga:
         ld ix,SCPB      
         ld a, mapPage
         out (vMMUPageSel),a
-        ld a,(ix+FrameSaveL)
+        ;ld a,(ix+FrameSaveL)
+        ; FrameL will be same as mapPage 
+        ; because the monitor maps the virtuall 64K address space
+        ; always to the first 64K phys. Space 
         out (vMMUFrameL),a
-        ld a,(ix+FrameSaveH)
+        ;ld a, (ix+FrameSaveH)
+        xor a ; zero..
         out (vMMUFrameH),a
         pop ix 
         ret 
