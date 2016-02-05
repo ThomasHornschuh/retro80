@@ -115,6 +115,15 @@ port
  );
 end component;
 
+component clk25pll
+port
+ (-- Clock in ports
+  Clk32Mhz           : in     std_logic;
+  -- Clock out ports
+  Clk25Mhz          : out    std_logic
+ );
+end component;
+
 
 
 COMPONENT fontrom
@@ -146,13 +155,20 @@ END COMPONENT;
 
 begin
 
- -- Pixel Clock generator
- clk1 : clk25Mhz
+--  Pixel Clock generator
+  pixelClock : clk25Mhz
   port map
    (-- Clock in ports
     CLK_IN1 => clk32Mhz,
     -- Clock out ports
     CLK_OUT1 => clk25);
+	 
+--pixelClock : clk25pll
+--  port map
+--   (-- Clock in ports
+--    Clk32Mhz => clk32Mhz,
+--    -- Clock out ports
+--    Clk25Mhz => clk25);	 
 	 
 	 
  fontMem : fontrom

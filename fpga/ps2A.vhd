@@ -39,7 +39,7 @@ entity ps2A is
            cs               : in  std_logic; -- chip select 
            req_read         : in  std_logic;
 			  req_write			 : in  std_logic;
-			  interrupt        : out std_logic;
+			  int_req          : out std_logic;
 			  --
 			  clk32Mhz			 : in  std_logic;
 			  ps2_clk      	 : IN  STD_LOGIC;                     --clock signal from PS/2 keyboard
@@ -62,12 +62,36 @@ architecture Behavioral of ps2A is
 		ps2_code : OUT std_logic_vector(7 downto 0)
 		);
 	END COMPONENT;
+	
+	
+	COMPONENT fifo
+	 GENERIC(
+        depth_log2  : integer; 
+        hwm_space   : integer;
+        width       : integer
+    );
+	PORT(
+		clk : IN std_logic;
+		reset : IN std_logic;
+		write_en : IN std_logic;
+		read_en : IN std_logic;
+		data_in : IN std_logic_vector(7 downto 0);          
+		write_ready : OUT std_logic;
+		read_ready : OUT std_logic;
+		data_out : OUT std_logic_vector(7 downto 0);
+		high_water_mark : OUT std_logic
+		);
+	END COMPONENT;
 
 
-  signal dataRegister : std_logic_vector(7 downto 0); -- Input register
-  signal statusRegister,intEnableRegister : std_logic;
+ 
+  signal fifoDataOut  : std_logic_vector(7 downto 0); -- wire Fifo->Data Bus
+  signal intEnableRegister : std_logic;
   signal ps2Data : std_logic_vector(7 downto 0);
   signal  dataReady,dataReadyLatch,resDRLatch : std_logic;
+  signal fifoDataReady, fifoReadEn, dataReadEn, notFull, fifoReset : std_logic; 
+  signal oldFifoReady : std_logic;
+  signal interrupt : std_logic; -- Interrupt Request 
   
   signal clk32b : std_logic ; -- buffered clock
 
@@ -94,16 +118,37 @@ begin
 	);
 	
 	
+	ps2fifo: fifo
+    generic map(
+        depth_log2 => 4,  -- 16 Bytes FIFO
+        hwm_space  => 1,
+        width      => 8
+    )
+	PORT MAP(
+		clk => clk,
+		reset => fifoReset,
+		write_en => dataReadyLatch,
+		write_ready => notFull,
+		read_en => dataReadEn , -- will increment read pointer on clock
+		read_ready => fifoDataReady,
+		data_in => ps2Data,
+		data_out => fifoDataOut
+		--high_water_mark => 
+	);
+	
+	
 	-- combinatorial logic
 	
+	int_req <= interrupt; 
 	
+	dataReadEn <= cs and req_read and  AdrBus(0); -- Read from Adr x1 
 	
 	-- CPU Output Bus Multiplexer
 	
 	process(AdrBus) begin	 	 
        case AdrBus(0) is 
-			 when '0' => data_out<= "000000" & intEnableRegister & statusRegister;						    
-			 when '1' => data_out <= dataRegister;			 
+			 when '0' => data_out<= interrupt&"00000" & intEnableRegister & fifoDataReady;						    
+			 when '1' => data_out <= fifoDataOut;			 
 			 when others => data_out <= (others => 'X');
 		  end case;	 	
    end process;	
@@ -121,40 +166,43 @@ begin
 	
 	
 	process(clk) begin 
-
-     -- The Status Register is set when a new char has received by the PS2 controller
-	  -- it is cleared when reading from the data port   
-	  -- clearing has priority over set - so in case of an overlap the status bit will be set
-	  -- on next clk after the I/O cycle 
+	
+	  
 	  -- Write to Bit 1 of the control port will set/reset the IntEnable Flag
      -- The interrupt is acknowledged with writing a 1 to bit 7 of the control port 	  
 	
-	  if rising_edge(clk) then 
+	  if rising_edge(clk) then
+	    -- init defaults
+	    fifoReset<='0';
+		 
+		 oldFifoReady<= fifoDataReady;
+	  		
 	    if reset='1' then  
-	      statusRegister<='0';
-			intEnableRegister<='0';		  	  
+			intEnableRegister<='0';
+         fifoReset<= '1';			
 	    elsif req_write='1' and cs='1' and AdrBus(0)='0' then -- write to control port
 		 			
 			if data_in(7) = '1' then -- int Acknwoledge
 			   interrupt <= '0'; 
 			end if;
+			if data_in(6) = '1' then -- controller Reset 
+			   fifoReset<= '1';
+				interrupt <= '0';
+			end if;
 			
 			intEnableRegister<=data_in(1);	
-			
-		 elsif req_read = '1' and cs='1' and AdrBus(0)='1' then -- read from data port
-			statusRegister<='0'; -- will reset status Register	
-			
-		 elsif dataReadyLatch='1' then 
-		    -- Latch Data from Keyboard Controller to I/O registers
-	      statusRegister<='1';
-		   dataRegister<=ps2Data;
-			if intEnableRegister='1' then
-			  interrupt <= '1';
-			end if;  
-			resDRLatch<='1'; -- clear Latch 
-		 else
-			resDRLatch<='0';
+
+		 -- Interrupt is asserted when FifoReady changes from not ready to ready 
+		 -- and intEnableFlag is set to 1 
+		 elsif oldFifoReady ='0' and fifoDataReady='1'  and intEnableRegister='1' then
+			  interrupt <= '1';				
 	    end if;		 
+		 -- Reset Logic for DataReadyLatch
+		 if dataReadyLatch='1' then	
+		   resDRLatch<='1'; -- clear Latch 
+	    else
+	      resDRLatch<='0';
+		 end if; 
 	  end if;
 	
 	

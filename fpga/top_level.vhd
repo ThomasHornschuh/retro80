@@ -281,7 +281,7 @@ begin
 		cs => ps2a_cs ,
 		req_read => req_read,
 		req_write => req_write,
-		interrupt => ps2a_interrupt,
+		int_req => ps2a_interrupt,
 		clk32Mhz => clk32Mhz,
 		ps2_clk => PS2CLKA,
 		ps2_data =>PS2DATA 
