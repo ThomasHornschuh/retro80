@@ -30,7 +30,10 @@ entity fifo is
         read_ready  : out std_logic; -- is there data waiting to read?
         data_in     : in  std_logic_vector(width-1 downto 0);
         data_out    : out std_logic_vector(width-1 downto 0);
-        high_water_mark : out std_logic
+        high_water_mark : out std_logic;
+		  -- Debug outputs
+		  dbg_read_ptr : out std_logic_vector(depth_log2-1 downto 0);
+		  dbg_write_ptr : out std_logic_vector(depth_log2-1 downto 0)
     );
 end fifo;
 
@@ -43,6 +46,9 @@ architecture behaviour of fifo is
     signal full      : std_logic;
     signal empty     : std_logic;
 begin
+
+    dbg_read_ptr <= std_logic_vector(read_ptr);
+	 dbg_write_ptr <= std_logic_vector(write_ptr);
 
     is_empty: process(read_ptr, write_ptr)
     begin

@@ -79,7 +79,9 @@ architecture Behavioral of ps2A is
 		write_ready : OUT std_logic;
 		read_ready : OUT std_logic;
 		data_out : OUT std_logic_vector(7 downto 0);
-		high_water_mark : OUT std_logic
+		high_water_mark : OUT std_logic;
+		dbg_read_ptr : out std_logic_vector(depth_log2-1 downto 0);
+		dbg_write_ptr : out std_logic_vector(depth_log2-1 downto 0)
 		);
 	END COMPONENT;
 
@@ -88,10 +90,13 @@ architecture Behavioral of ps2A is
   signal fifoDataOut  : std_logic_vector(7 downto 0); -- wire Fifo->Data Bus
   signal intEnableRegister : std_logic;
   signal ps2Data : std_logic_vector(7 downto 0);
-  signal  dataReady,dataReadyLatch,resDRLatch : std_logic;
+  signal  dataReady,oldDataReady, dataReadyLatch,resDRLatch : std_logic;
   signal fifoDataReady, fifoReadEn, dataReadEn, notFull, fifoReset : std_logic; 
   signal oldFifoReady : std_logic;
   signal interrupt : std_logic; -- Interrupt Request 
+  signal rdCycleOld : std_logic; -- read cycle detection 
+  signal fifoRdEn : std_logic; -- Signal for FIFO to increment read pointer 
+  signal dbgReadPtr, dbgWritePtr : std_logic_vector(3 downto 0);
   
   signal clk32b : std_logic ; -- buffered clock
 
@@ -129,11 +134,13 @@ begin
 		reset => fifoReset,
 		write_en => dataReadyLatch,
 		write_ready => notFull,
-		read_en => dataReadEn , -- will increment read pointer on clock
+		read_en => fifoRdEn , -- will increment read pointer on clock
 		read_ready => fifoDataReady,
 		data_in => ps2Data,
-		data_out => fifoDataOut
+		data_out => fifoDataOut,
 		--high_water_mark => 
+		dbg_read_ptr => dbgReadPtr,
+		dbg_write_ptr => dbgWritePtr
 	);
 	
 	
@@ -141,14 +148,16 @@ begin
 	
 	int_req <= interrupt; 
 	
-	dataReadEn <= cs and req_read and  AdrBus(0); -- Read from Adr x1 
+	dataReadEn <= cs and req_read and (not AdrBus(1)) and AdrBus(0); -- Read from Adr x1 
+	
 	
 	-- CPU Output Bus Multiplexer
 	
-	process(AdrBus) begin	 	 
-       case AdrBus(0) is 
-			 when '0' => data_out<= interrupt&"00000" & intEnableRegister & fifoDataReady;						    
-			 when '1' => data_out <= fifoDataOut;			 
+	process(AdrBus,interrupt,fifoDataOut) begin	 	 
+       case AdrBus(1 downto 0) is 
+			 when "00" => data_out<= interrupt&"00000" & intEnableRegister & fifoDataReady;						    
+			 when "01" => data_out <= fifoDataOut;		
+          when "11" => data_out <= dbgReadPtr & dbgWritePtr;			 
 			 when others => data_out <= (others => 'X');
 		  end case;	 	
    end process;	
@@ -156,13 +165,13 @@ begin
 	
 	-- Synchronous logic
 	
-	process(dataReady,resDRLatch) begin
-	  if resDRLatch='1' then
-	    dataReadyLatch<='0';
-	  elsif rising_edge(dataReady) then
-	    dataReadyLatch<='1';
-	  end if;	 
-	end process;
+--	process(dataReady,resDRLatch) begin
+--	  if resDRLatch='1' then
+--	    dataReadyLatch<='0';
+--	  elsif rising_edge(dataReady) then
+--	    dataReadyLatch<='1';
+--	  end if;	 
+--	end process;
 	
 	
 	process(clk) begin 
@@ -176,7 +185,22 @@ begin
 	    fifoReset<='0';
 		 
 		 oldFifoReady<= fifoDataReady;
-	  		
+		 
+		 rdCycleOld <= dataReadEn;
+		 if rdCycleOld = '1' and dataReadEn = '0' then -- detect end of read cycle
+		    fifoRdEn <= '1';
+		 else	 
+		    fifoRdEn <= '0';
+		 end if; 	
+	  	
+       oldDataReady<=dataReady;
+		 
+		 if oldDataReady='0' and dataReady='1' then -- dataReady assert detected
+		   dataReadyLatch<='1';
+		 else
+       	dataReadyLatch<='0';
+       end if;			
+		
 	    if reset='1' then  
 			intEnableRegister<='0';
          fifoReset<= '1';			
@@ -198,11 +222,11 @@ begin
 			  interrupt <= '1';				
 	    end if;		 
 		 -- Reset Logic for DataReadyLatch
-		 if dataReadyLatch='1' then	
-		   resDRLatch<='1'; -- clear Latch 
-	    else
-	      resDRLatch<='0';
-		 end if; 
+--		 if dataReadyLatch='1' then	
+--		   resDRLatch<='1'; -- clear Latch 
+--	    else
+--	      resDRLatch<='0';
+--		 end if; 
 	  end if;
 	
 	
