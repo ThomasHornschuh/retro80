@@ -74,7 +74,8 @@ entity top_level is
 end top_level;
 
 architecture Behavioral of top_level is
-    constant clk_freq_mhz        : natural := 128; -- this is the frequency which the PLL outputs, in MHz.
+    constant clk_freq_hz         : natural :=114_800_000;
+    constant clk_freq_mhz        : natural := clk_freq_hz / 1_000_000; -- this is the frequency which the PLL outputs, in MHz.
 
     -- SDRAM configuration
     constant sdram_address_width : natural := 22;
@@ -98,6 +99,7 @@ architecture Behavioral of top_level is
     signal clk_feedback         : std_logic;  -- PLL clock feedback
     signal clk_unbuffered       : std_logic;  -- unbuffered system clock
     signal clk                  : std_logic;  -- buffered system clock (all logic should be clocked by this)
+	 signal clk25Mhz_unbuf,clk25Mhz : std_logic; -- TH: Pixel Clock
 
     -- console latch
    -- signal console_select_clk1  : std_logic;
@@ -259,7 +261,8 @@ begin
 		O_VIDEO_B => O_VIDEO_B,
 		O_VIDEO_G =>O_VIDEO_G ,
 		O_VIDEO_R =>O_VIDEO_R ,
-		clk32Mhz => clk32Mhz,
+		--clk32Mhz => clk32Mhz,
+		clk25 => clk25Mhz,
 		DBOut => vga_data_out,
 		DBIn => cpu_data_out,
 		AdrBus => physical_address(11 downto 0),
@@ -491,7 +494,7 @@ begin
 
    -- UART connected to FTDI USB UART
    uart0: entity work.uart_interface
-   generic map ( watch_for_reset => 1, clk_frequency => (clk_freq_mhz * 1000000) )
+   generic map ( watch_for_reset => 1, clk_frequency => clk_freq_hz )
    port map(
                clk => clk,
                reset => system_reset,
@@ -530,7 +533,7 @@ begin
 
    -- Timer device (internally scales the clock to 1MHz)
    timer: entity work.timer
-   generic map ( clk_frequency => (clk_freq_mhz * 1000000) )
+   generic map ( clk_frequency => clk_freq_hz )
    port map(
                clk => clk,
                reset => system_reset,
@@ -612,15 +615,19 @@ begin
 
    -- PLL scales 32MHz Papilio Pro oscillator frequency to 128MHz
    -- clock for our logic.
+	-- TH : expermental derive CPU und Pixel Clock from PLL
+	-- will lead do CPU Clock of 114,8 MhZ
    clock_pll: PLL_BASE 
    generic map (
                BANDWIDTH      => "OPTIMIZED",        -- "HIGH", "LOW" or "OPTIMIZED" 
-               CLKFBOUT_MULT  => 16,                 -- Multiply value for all CLKOUT clock outputs (1-64)
+               --CLKFBOUT_MULT  => 16,                 -- Multiply value for all CLKOUT clock outputs (1-64)
+					CLKFBOUT_MULT => 25,                    -- 800 Mhz
                CLKFBOUT_PHASE => 0.0,                -- Phase offset in degrees of the clock feedback output (0.0-360.0).
                CLKIN_PERIOD   => 31.25,              -- Input clock period in ns to ps resolution (i.e. 33.333 is 30 MHz).
                                                      -- CLKOUT0_DIVIDE - CLKOUT5_DIVIDE: Divide amount for CLKOUT# clock output (1-128)
-               CLKOUT0_DIVIDE => 4,                  -- 32MHz * 16 / 4 = 128MHz. Adjust clk_freq_mhz constant (above) if you change this.
-               CLKOUT1_DIVIDE => 1,
+              -- CLKOUT0_DIVIDE => 4,                  -- 32MHz * 16 / 4 = 128MHz. Adjust clk_freq_mhz constant (above) if you change this.
+               CLKOUT0_DIVIDE => 7,                  -- 800 Mhz / 7 = 114.8 Mhz 
+					CLKOUT1_DIVIDE => 32,                 -- 800 Mhz / 32 = 25 Mhz
                CLKOUT2_DIVIDE => 1,       
                CLKOUT3_DIVIDE => 1,
                CLKOUT4_DIVIDE => 1,       
@@ -645,8 +652,8 @@ begin
                CLKFBOUT => clk_feedback, -- 1-bit output: PLL_BASE feedback output
                CLKFBIN  => clk_feedback, -- 1-bit input: Feedback clock input
                                          -- CLKOUT0 - CLKOUT5: 1-bit (each) output: Clock outputs
-               CLKOUT0 => clk_unbuffered, -- 64MHz clock output
-               CLKOUT1 => open,
+               CLKOUT0 => clk_unbuffered, -- ~115 Mhz clock output
+               CLKOUT1 => clk25Mhz_unbuf,       -- Pixel Clock
                CLKOUT2 => open,      
                CLKOUT3 => open,
                CLKOUT4 => open,      
@@ -661,5 +668,11 @@ begin
                O => clk,     
                I => clk_unbuffered
             );
+				
+   BUFG_clk25: BUFG 
+   port map(
+               O => clk25Mhz,     
+               I => clk25Mhz_unbuf
+            );				
 
 end Behavioral;

@@ -58,6 +58,16 @@ CONFIG PROHIBIT=P144;
 CONFIG PROHIBIT=P69;
 CONFIG PROHIBIT=P60;
 
+#TH: Decale clk and clk25 as independant to avoid analysing cross domain 
+#pathes between both clock domanins
+NET clk TNM_NET = "cpuclk";
+NET clk25Mhz TNM_NET =  "pixclk";
+
+TIMESPEC "TS_XDOMAINS_CPUPIX" = from "cpuclk" to "pixclk" TIG;
+TIMESPEC "TS_XDOMAINS_PIXCPU" = from "pixclk" to "cpuclk" TIG;
+
+
+
 # 32MHz oscillator
 NET sysclk_32m      LOC="P94"  | IOSTANDARD=LVTTL | PERIOD=31.25ns; # | CLOCK_DEDICATED_ROUTE = FALSE;
 
@@ -165,4 +175,4 @@ NET I_SW(3)        LOC="P59"  | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST;         
 
 # PS/2 Port a on Arcade Megawing
 NET PS2DATA        LOC="P114" | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST | PULLUP; # C0
-NET PS2CLKA        LOC="P115" | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST | PULLUP; # C1
+NET PS2CLKA        LOC="P115" | IOSTANDARD=LVTTL | DRIVE=8 | SLEW=FAST | PULLUP | TIG; # C1

@@ -9,7 +9,16 @@
 -- Target Devices: 
 -- Tool versions: 
 -- Description: 
---
+--  PS/2 Interface
+--  IO Ports
+--     Port x0 : Status and Command Port
+--     Read:  Int | 00000 | IntEn | DataReady
+--     Write: INTACK | RESET | XXXX | IntEn | X
+
+--     Port x1 : Data Read (first Scancode in FIFO)
+--     Port x2 : Bit 7..4:  FIFO Read Ptr
+--               Bit 3..0:  FIFO Write Ptr 
+--   
 -- Dependencies: 
 --
 -- Revision: 
@@ -90,15 +99,18 @@ architecture Behavioral of ps2A is
   signal fifoDataOut  : std_logic_vector(7 downto 0); -- wire Fifo->Data Bus
   signal intEnableRegister : std_logic;
   signal ps2Data : std_logic_vector(7 downto 0);
-  signal  dataReady,oldDataReady, dataReadyLatch,resDRLatch : std_logic;
-  signal fifoDataReady, fifoReadEn, dataReadEn, notFull, fifoReset : std_logic; 
-  signal oldFifoReady : std_logic;
-  signal interrupt : std_logic; -- Interrupt Request 
-  signal rdCycleOld : std_logic; -- read cycle detection 
-  signal fifoRdEn : std_logic; -- Signal for FIFO to increment read pointer 
-  signal dbgReadPtr, dbgWritePtr : std_logic_vector(3 downto 0);
+  signal dataReady,oldDataReady, fifoWriteEn : std_logic; -- fifo Write detection
+  signal notFull, fifoReset : std_logic;  -- misc Fifo control signals
+			
+  signal fifoDataReady,oldFifoReady : std_logic; -- Fifo data availble detection 
   
-  signal clk32b : std_logic ; -- buffered clock
+  signal interrupt : std_logic; -- Interrupt Request 
+  signal oldDataReadEn,dataReadEn, fifoReadEn : std_logic; -- fifo read cycle detection 
+  signal fifoRdEn : std_logic; -- Signal for FIFO to increment read pointer 
+  
+  signal dbgReadPtr, dbgWritePtr : std_logic_vector(3 downto 0); -- debug logic
+  
+  signal clk32b : std_logic ; -- buffered  32Mhz clock
 
   
 begin
@@ -132,7 +144,7 @@ begin
 	PORT MAP(
 		clk => clk,
 		reset => fifoReset,
-		write_en => dataReadyLatch,
+		write_en => fifoWriteEn,
 		write_ready => notFull,
 		read_en => fifoRdEn , -- will increment read pointer on clock
 		read_ready => fifoDataReady,
@@ -165,14 +177,6 @@ begin
 	
 	-- Synchronous logic
 	
---	process(dataReady,resDRLatch) begin
---	  if resDRLatch='1' then
---	    dataReadyLatch<='0';
---	  elsif rising_edge(dataReady) then
---	    dataReadyLatch<='1';
---	  end if;	 
---	end process;
-	
 	
 	process(clk) begin 
 	
@@ -184,21 +188,23 @@ begin
 	    -- init defaults
 	    fifoReset<='0';
 		 
-		 oldFifoReady<= fifoDataReady;
+		 -- Edge detection FFs 
+		 oldFifoReady<= fifoDataReady;		 
+		 oldDataReadEn <= dataReadEn;
+		 oldDataReady<=dataReady;
 		 
-		 rdCycleOld <= dataReadEn;
-		 if rdCycleOld = '1' and dataReadEn = '0' then -- detect end of read cycle
+		 if oldDataReadEn = '1' and dataReadEn = '0' then -- detect end of read cycle
 		    fifoRdEn <= '1';
 		 else	 
 		    fifoRdEn <= '0';
 		 end if; 	
 	  	
-       oldDataReady<=dataReady;
+       
 		 
 		 if oldDataReady='0' and dataReady='1' then -- dataReady assert detected
-		   dataReadyLatch<='1';
+		   fifoWriteEn<='1';
 		 else
-       	dataReadyLatch<='0';
+       	fifoWriteEn<='0';
        end if;			
 		
 	    if reset='1' then  
@@ -221,12 +227,7 @@ begin
 		 elsif oldFifoReady ='0' and fifoDataReady='1'  and intEnableRegister='1' then
 			  interrupt <= '1';				
 	    end if;		 
-		 -- Reset Logic for DataReadyLatch
---		 if dataReadyLatch='1' then	
---		   resDRLatch<='1'; -- clear Latch 
---	    else
---	      resDRLatch<='0';
---		 end if; 
+
 	  end if;
 	
 	

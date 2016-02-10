@@ -51,7 +51,9 @@ entity vgatop is
            O_VIDEO_R : out  STD_LOGIC_VECTOR (3 downto 0);
 			  
 			  -- Oszillator Clock  
-           clk32Mhz : in  STD_LOGIC;
+           --clk32Mhz : in  STD_LOGIC;
+			  -- Pixel Clock
+			  clk25 : in STD_LOGIC;
 			  
 			  -- CPU  Interface to Video RAM und Registers
 			  DBOut : out  STD_LOGIC_VECTOR (7 downto 0);
@@ -69,10 +71,10 @@ end vgatop;
 architecture Behavioral of vgatop is
   
 
-signal clk25 : std_logic;
+--signal clk25 : std_logic;
 signal RomAdr : STD_LOGIC_VECTOR(11 DOWNTO 0);
 signal RomData :  STD_LOGIC_VECTOR(7 DOWNTO 0);
-signal r,g,b : std_logic;
+signal r,g,b,hsync,vsync : std_logic;
 
 signal VideoAdr : std_logic_vector(11 downto 0);
 signal VideoData : STD_LOGIC_VECTOR(7 DOWNTO 0);
@@ -83,7 +85,17 @@ signal ctl_oreg    : std_logic_vector(7 downto 0) :="11110010";
 
 signal VRAMDBOut   : std_logic_vector(7 downto 0); 
 
+-- IO blocks
+signal iob_r,iob_g,iob_b : STD_LOGIC_VECTOR (3 downto 0);
+signal iob_hsync, iob_vsync : std_logic;
+attribute IOB : string; 
 
+attribute IOB of iob_r : signal is "TRUE"; 
+attribute IOB of iob_g : signal is "TRUE";
+attribute IOB of iob_b : signal is "TRUE";
+
+attribute IOB of iob_hsync : signal is "TRUE";
+attribute IOB of iob_vsync : signal is "TRUE";
 
 
 COMPONENT vga80x40
@@ -115,14 +127,7 @@ port
  );
 end component;
 
-component clk25pll
-port
- (-- Clock in ports
-  Clk32Mhz           : in     std_logic;
-  -- Clock out ports
-  Clk25Mhz          : out    std_logic
- );
-end component;
+
 
 
 
@@ -156,12 +161,12 @@ END COMPONENT;
 begin
 
 --  Pixel Clock generator
-  pixelClock : clk25Mhz
-  port map
-   (-- Clock in ports
-    CLK_IN1 => clk32Mhz,
-    -- Clock out ports
-    CLK_OUT1 => clk25);
+--  pixelClock : clk25Mhz
+--  port map
+--   (-- Clock in ports
+--    CLK_IN1 => clk32Mhz,
+--    -- Clock out ports
+--    CLK_OUT1 => clk25);
 	 
 --pixelClock : clk25pll
 --  port map
@@ -209,8 +214,8 @@ begin
 		R => r,
 		G => g,
 		B => b,
-		hsync => O_HSYNC,
-		vsync => O_VSYNC
+		hsync => hsync,
+		vsync => vsync
 	);
 	
 	-- combinatorial logic
@@ -232,12 +237,27 @@ begin
    end process;
 	
 	
-	process (r,g,b) begin
-	  for i in 0 to 3 loop 
-        O_VIDEO_R(i) <= r;
-		  O_VIDEO_G(i) <= g;
-		  O_VIDEO_B(i) <= b;
-	  end loop;
+-- video output 	
+   O_VSYNC <= iob_vsync;
+	O_HSYNC <= iob_hsync;
+       
+   O_VIDEO_R <= iob_R;
+	O_VIDEO_G <= iob_G;
+	O_VIDEO_B <= iob_b;
+	        
+	
+-- iob register clocking	
+	process (clk25) begin
+	  if rising_edge(clk25) then 
+	    for i in 0 to 3 loop 
+          iob_r(i) <= r;
+		    iob_g(i) <= g;
+		    iob_b(i) <= b;
+	    end loop;
+		 iob_hsync <= hsync;
+		 iob_vsync <= vsync;
+		 		 
+	  end if;
    end process;
 		
 	-- Synchronous logic

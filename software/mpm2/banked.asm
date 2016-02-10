@@ -146,14 +146,7 @@ systeminit: ; initialise system -- info in C, DE, HL.
             and 0xf0
             or  0x0c
             out (UART1_STATUS), a
-            
-             
-    if CONFPS2
-            ; Program PS/2 Port to enable interrupts 
-            ld a, 02H
-            out (PS2_CONTROL),a    
-    endif         
-
+    
             ; tell CPU to use interrupt mode 2 (Z80 interrupt vector table )            
             im 2            
             ; note that we don't call ei ourselves, since MP/M-II does this once we return

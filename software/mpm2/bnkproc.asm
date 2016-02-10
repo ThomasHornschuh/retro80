@@ -22,7 +22,9 @@ ps2stkmsg: db 'PANIC: STK Overflow ps2kbd',0
    
   
 ps2proc:   ; PS/2 keyboard handler process 
-          in a,(PS2_DATA) ; clear  ps/2 controller 
+           ; Program PS/2 Port to enable interrupts 
+            ld a, 01000010B ; PS/2 Controller reset (clears FIFO and pending IRQs) + Enable Interrupt
+            out (PS2_CONTROL),a 
           
           if Q_INPUT = 0  
             ld c,makeque
@@ -50,7 +52,8 @@ ps2pl2:   call ps2do  ; wait for input and process it
           ld a,0
           ld (convValid),a ; clear semaphore 
                     
-          ld c, writeque
+          ;ld c, writeque
+          ld c,cndwrque
           ld de, ps2wuqcb
           call xdos                    
           jr ps2pl1    
