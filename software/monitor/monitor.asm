@@ -1434,6 +1434,7 @@ incharwait:
 
           ; BIOS conin for  PS/2 keyboard  
           push ix    
+          push iy 
           push hl 
           push bc 
           push de           
@@ -1450,6 +1451,7 @@ ps2con1:  ld a,0
           pop de 
           pop bc 
           pop hl
+          pop iy 
           pop ix 
           ret           
  
