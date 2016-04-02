@@ -58,7 +58,7 @@ CONFIG PROHIBIT=P144;
 CONFIG PROHIBIT=P69;
 CONFIG PROHIBIT=P60;
 
-#TH: Decale clk and clk25 as independant to avoid analysing cross domain 
+#TH: Declare clk and clk25 as independant to avoid analysing cross domain 
 #pathes between both clock domanins
 NET clk TNM_NET = "cpuclk";
 NET clk25Mhz TNM_NET =  "pixclk";

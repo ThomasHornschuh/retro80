@@ -859,8 +859,10 @@ idle:       halt
   include   vgabasic.asm
 
   vconout: push ix ; some CP/M programs may not expect BIOS to change Z80 regs.
+           push iy 
            ld ix,scrpb0
            call vgaconout 
+           pop iy 
            pop ix 
            ret 
                 
