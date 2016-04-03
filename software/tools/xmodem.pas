@@ -18,6 +18,8 @@ program xmodem;
 
 {$R-,C-,B-}
 
+{$IXDOS.INC}
+{$IXMIO.INC}
 
 const soh=$01;
       stx=$02;
@@ -28,293 +30,20 @@ const soh=$01;
       etx=$03; (*Ctrl-C*)
 
 
-     bdos_getVersion = 12;
-     bdos_conin = 1;
-     bdos_conout = 2;
-     bdos_rawInput = 3;
-     bdos_rawOutput = 4;
-     bdos_constat = 11;
-
-     xdos_cli = 150;
-     xdos_assign_console = 149;
-     xdos_getconsole = 153;
-     xdos_attachconsole = 146;
-     xdos_setpriority = 145;
-     xdos_setconsole = 148;
-     xdos_GetPD = $9C;
-
-
       trace : boolean = false;
 
 type tblock = array [1..1024] of byte;
      bPointer = ^tblock;
 
      tError = (success,chkfail,abort,xEof,sequenceError);
-     tOS = (cpm2,cpm3,mpm);
-
-     tOperatingMode = (
-           generic, (* use TP kbd/con without any specical settings *)
-           cpmtty,  (* Use CP/M CON set to tty (uses TP kbd/con), set IOBYTE to 0 *)
-           cpmaux,  (* Use CP/M RDR/PUN device, (TP AUX device) - not yet supported  *)
-           mpmcons, (* Uses a specific console channel with MP/M, mapped to TP USR device *)
-           mpmdefcons (*Uses default console channel with MP/M, mapped to TP USR device *)
-     );
-
-
-      xdos_abp = record
-       console_number : byte;
-       process_name : array [1..7] of byte;
-       match : byte;
-     end;
-
-     word = integer;
-     address = ^byte;
-
-     str255 = string[255];
-
-     pxdos_PD = ^xdos_processDescriptor;
-
-     xdos_processDescriptor = record
-        link : pxdos_PD;
-        status : byte;
-        priority : byte;
-        stkptr : address;
-        name : array[1..8] of byte;
-        cons_list : byte;
-        memseg : byte;
-        dparam : address;
-        thread : address;
-        dma : address;
-        dsksel : byte;
-        dcnt : address;
-        srchl : byte;
-        srcha : address;
-        pd : word;
-        reg : record
-          XHL,XDE,XBC,XAF,IY,IX,HL,DE,BC,AF : word;
-        end;
-        ext : word;
-     end;
-
-
+   
 var  logfile,tracefile : text;
      filename : string[15];
      blockfile : file;
      osver : tOS;
-     OperatingMode : tOperatingMode;
 
-     xm_console : byte; (*MP/M only, console number used for xmodem transfer*)
-     io_console : byte; (*MP/M only, console number to be used for User I/O *)
-
-     current_console: byte; (* console set by last set console call *)
-
-
- procedure setConsole(cons:byte);
- begin
-   if cons<>current_console then begin
-     bdos(xdos_setconsole,cons);
-     current_console:=cons;
-   end;
- end;
-
-
-(* I/O  Drivers for Turbo Pascal*)
-
-procedure UsrOut(ch: char);
-begin
-   setConsole(xm_console);
-   bdos(bdos_rawOutput,byte(ch));
-end;
-
-
-function UsrIn:char;
-begin
-  setConsole(xm_console);
-  UsrIn:=chr(bdos(bdos_rawInput));
-end;
-
-procedure ConOut(ch: char);
-begin
-   setConsole(io_console);
-   bdos(bdos_conout,byte(ch));
-end;
-
-
-function ConIn:char;
-begin
-  setConsole(io_console);
-  UsrIn:=chr(bdos(bdos_conin));
-end;
-
-function ConStat:boolean;
-begin
-  setConsole(io_console);
-  ConStat:=bdos(bdos_constat )<>0;
-end;
-
-procedure setDrivers;
-begin
-  ConStPtr:=addr(Constat);
-  ConInPtr:=addr(ConIn);
-  ConOutPtr:=addr(ConOut);
-  UsrOutPtr:=addr(UsrOut);
-  UsrInPtr:=addr(UsrIn);
-
-end;
-
-function xmInStat:boolean;
-begin
-  case OperatingMode of
-    generic,cpmtty: xmInStat:=keypressed;
-    cpmaux: xmInStat:=true; (* there is no CP/M API for this... *)
-   else begin
-     setConsole(xm_console);
-     xmInStat:=bdos(bdos_constat )<>0;
-     end;
-  end; (*case *)
-end;
-
-
-
- function getOS:tOS;
- var vers : integer;
- begin
-   vers:=bdosHL(bdos_getVersion);
-   if hi(vers)=1 then
-     getOS:=mpm
-   else case lo(vers) and $f0 of
-     $20: getOS:=cpm2;
-     $30: getOS:=cpm3;
-     else
-          getOS:=cpm2; (* Assume unkown OS version as cpm2 *)
-   end;
- end;
-
-
- function parseCmdLine:boolean;
- label 99; (* Error Handler *)
- var I : integer;
-     param : string[80];
-     code : integer;
-     cons : integer;
-     fModeSet : boolean;
-     fFileName : boolean;
-
-     function checkAlreadySet:boolean;
-     begin
-       if fModeSet then begin
-         writeln('Only one occurence of /c or /g option allowed');
-         checkAlreadySet:=true;
-       end else begin
-        fModeSet:=true;
-        checkAlreadySet:=false;
-      end;
-    end;
-
-
- begin
-    fModeSet:=false;
-    fFileName:=false;
-    for I:=1 to ParamCount do begin
-       param:=ParamStr(I);
-       if param[1]='/' then (*command line option *)
-          case UpCase(param[2]) of
-            'C': begin
-                   if checkAlreadySet then begin
-                     parseCmdLine:=false;
-                     goto 99;
-                   end;
-                   if osver<>mpm then begin
-                      writeln('/C option only allowed with MP/M');
-                      parseCmdLine:=false;
-                      goto 99;
-                   end;
-                   cons:= -1;
-                   Val(copy(param,4,80),cons,code);
-                   if (code<>0) or (param[3]<>':') or (cons<0) or (cons>15) then begin
-                      writeln('Error in /c option. Usage /c:nn nn = 0..15');
-                      parseCmdLine:=false;
-                      goto 99;
-                   end;
-                   if cons=bdos(xdos_getconsole) then
-                      OperatingMode:=mpmdefcons
-                   else
-                     OperatingMode:=mpmcons;
-                   xm_console:=cons;
-                 end;
-            'G': begin
-                   if checkAlreadySet then begin
-                     parseCmdLine:=false;
-                     goto 99;
-                   end;
-                   OperatingMode:=generic;
-                 end;
-            'T': trace:=true;
-          end (*case *)
-        else  (* param does not start with a / - assume filename *)
-          if fFileName then begin  (* already set *)
-            writeln('Only one filename parameter allowed');
-            parseCmdLine:=false;
-            goto 99;
-          end else begin
-            fFileName:=true;
-            filename:=copy(paramStr(I),1,15);
-         end;
-    end;  (* for *)
-
-    if not fFileName then begin
-      writeln('Filename missing');
-      parseCmdLine:=false;
-      goto 99;
-    end;
-    if not fModeSet then (*If no mode option set then set default behaviour *)
-      case (osver) of
-        mpm: begin
-              xm_console:=bdos(xdos_getconsole);
-              OperatingMode:=mpmdefcons;
-             end;
-        cpm2: OperatingMode:=cpmtty;
-        cpm3: OperatingMode:=generic;
-      end;
-    parseCmdLine:=true;
- 99:
- end;
-
-
- procedure setupMPMIO;
- var ac : xdos_abp;
-     ppd : pxdos_PD;
-     I : integer;
- begin
-   setDrivers;
-   if io_console<>xm_console then begin
-     (* Assign the xm_console also to our process *)
-     ppd:=ptr(bdosHL(xdos_GetPD));
-     ac.console_number:=xm_console;
-     ac.match:=0;
-     for I:=1 to 8 do ac.process_name[I]:=ppd^.name[I] and $7F;
-     bdos(xdos_assign_console,addr(ac));
-   end;
- end;
-
-
-
-
- Function UpdateCRC16(CRC       : Integer;      { CRC-16 to update  }
-                      data     : byte
-                    ) : Integer;
-    Var Bit          : Integer;
-        Carry                   : Boolean;      { catch overflow    }
-    begin
-        For Bit := 7 downto 0 do begin          { 8 bits per Byte   }
-            Carry := CRC and $8000 <> 0;        { shift overlow?    }
-            CRC := CRC SHL 1 or data  SHR Bit and 1;
-            if Carry then CRC := CRC xor $1021; { apply polynomial  }
-        end; { For Bit & ByteCount }            { all Bytes & bits  }
-    UpdateCRC16 := CRC;                         { updated CRC-16    }
- end {UpdateCRC16};
-
-
+{$IXMPARSE.INC}     
+     
 function xmodem_recv(var f:text;var buffer:tblock;var len:integer;
                      var blocknum:byte;useCRC:boolean):tError;
 label 99;
@@ -326,6 +55,7 @@ var c,c2,h1,h2: char;
     crc16 : integer;
     err : boolean;
 
+ {$ICRC16.INC}   
 
     procedure traceMarker(c:char);
     begin
