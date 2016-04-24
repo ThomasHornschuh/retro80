@@ -594,7 +594,7 @@ writemsg:   db "[WR ", 0
   endif           
 
 bootmsg:    db 0DH,0AH,0AH,"CP/M BIOS (Will Sowerbutts, 2013-11-05)",0DH,0AH
-            db "VGA and PS/2 Version (Thomas Hornschuh, 2016-01-27)",0DH,0AH
+            db "VGA and PS/2 Version (Thomas Hornschuh, 2016-04-24)",0DH,0AH
             db "CP/M 2.2 Copyright 1979 (c) by Digital Research",0DH,0AH,0
 ;; wbootmsg:   db "WBOOT ", 0
 ;; readmsg:    db "[RD ", 0

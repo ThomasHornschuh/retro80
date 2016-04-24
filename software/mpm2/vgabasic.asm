@@ -261,7 +261,8 @@ insline:   ; Insert Line at cursor position, IX points to scrpb
             or c ; check if BC = 0
             jr z, nomove
             lddr
-nomove:                 
+nomove:     
+            inc hl             
             ; Now HL points to last moved byte, this should be start of line to be inserted
             jr clrl ; fill with spaces, unmap, ei and return....
             
@@ -308,7 +309,7 @@ vgaconout:  ; Basic conout procedure  Reg C contains char -- IX contains scrpb
         ld a,(ix+cursX)
         inc a
         cp columns
-        jr nz, vco1 ; no at last column - just update cursX
+        jr nz, vco1 ; not at last column - just update cursX
         ; else go to first column of next line 
         xor a 
         ld (ix+cursX),a
@@ -399,7 +400,7 @@ escE:   call insline
 escT:   
         ld a,(ix+cursX)
 esctl1: 
-        cp columns-1
+        cp columns
         jr z,endEscMode
         ld e,a
         ld a,(ix+cursY)
