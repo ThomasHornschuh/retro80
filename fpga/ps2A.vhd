@@ -1,7 +1,12 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
+--+ RETRO80
+--+ An 8-Bit Retro Computer running Digital Research MP/M II and CP/M. 
+--+ Based on Will Sowerbutts  SOCZ80 Project:
+--+ http://sowerbutts.com/
+--+ RETRO80 extensions (c) 2015-2016 by Thomas Hornschuh
+--+ This project is licensed under the GPLV3: https://www.gnu.org/licenses/gpl-3.0.txt
+
+
 -- Create Date:    16:18:43 01/16/2016 
 -- Design Name: 
 -- Module Name:    ps2A - Behavioral 
@@ -12,11 +17,24 @@
 --  PS/2 Interface
 --  IO Ports
 --     Port x0 : Status and Command Port
---     Read:  Int | 00000 | IntEn | DataReady
---     Write: INTACK | RESET | XXXX | IntEn | X
+--            |---7---|---6---|--5--|--4--|--3--|--2--|--1--|--0--|   
+--     Read:  | INT   |                               |INTEN|FDRDY|
+
+--     Write: |INTACK | RESET |                       |INTEN|     |
+
+--  Description:
+--      Interrupt operation:
+--         When INTEN is 1 and FDRDY changes from 0 to 1 an interrupt is signaled with the int_req line
+--         A signaled interrupt status is also shown in Bit 7 of the Status/command Port
+--         The interrupt must be acknowledged with writing a 1 to the INTACK bit (Bit 7 of status/command port)
+--         This is important because the interrupt line in SOCZ80 is level triggered and repeated interrupts would occur
+--     
+--         FDRDY (FIFO Data Ready) is asserted whenever a Scancode is avaible in the FIFO. Reading from the data port
+--         will remove the first char from FIFO. FDRDY keeps asserted as long the FIFO is not empty.
+--         This has to be taken into account when writing an interrupt driven a keyboard driver.  
 
 --     Port x1 : Data Read (first Scancode in FIFO)
---     Port x2 : Bit 7..4:  FIFO Read Ptr
+--     Port x3 : Bit 7..4:  FIFO Read Ptr
 --               Bit 3..0:  FIFO Write Ptr 
 --   
 -- Dependencies: 

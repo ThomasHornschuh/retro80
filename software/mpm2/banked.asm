@@ -1,3 +1,11 @@
+;----------------------------------------------------------------------------------
+;--+ RETRO80
+;--+ An 8-Bit Retro Computer running Digital Research MP/M II and CP/M. 
+;--+ Based on Will Sowerbutts  SOCZ80 Project:
+;--+ http://sowerbutts.com/
+;--+ RETRO80 extensions (c) 2015-2016 by Thomas Hornschuh
+;--+ This project is licensed under the GPLV3: https://www.gnu.org/licenses/gpl-3.0.txt
+
 ; Banked portion of XIOS
 ; include betweem jump table and commonbase label 
 
@@ -83,8 +91,9 @@ setdma:     ; set DMA address given by BC
 			
             
 ; ---[ initialisation banked part ]-----------------------------    
-VECTOR_LENGTH equ 64    
+   
 systeminit: ; initialise system -- info in C, DE, HL.
+
 
             ; TH: Init VGA Library 
             ld a, 04H
@@ -93,16 +102,23 @@ systeminit: ; initialise system -- info in C, DE, HL.
             
             ld hl, initmsg
             call strout
-                        
-            ; initmsg can now be recycled as the sysvectors buffer
-
-            ; put jump instruction at interrupt vector
-            ; outdated !!!!
-            ;ld a, 0xc3 ; jump instruction
-            ;ld (0x38), a
-            ;ld hl, interrupt_handler
-            ;ld (0x39), hl
+ 
+            ld ix,scrpb0
+            ld hl,initmsg
+            ld a,0FFH
+            ld (preempted),a ; supress enabling of interrupts in VGA module
+prmsg:      ld a,(hl)
+            or a
+            jr z,sysinit1
+            ld c,a
+            push hl 
+            call vgaconout
+            pop hl 
+            inc hl 
+            jr prmsg
             
+                         
+sysinit1:   ld (preempted),a ; A will be 0 already          
             ; TH: Prepare Interrupt mode 2 handler
             
 			ld hl, intvector

@@ -24,7 +24,7 @@ open("cpm.bin", 'wb').write(mem_image)
 boot_image = readimg("zout/stage2.cim", 4096)
 
 # boot sector is 4KB
-# following 3 4KB sectors are loaded at 0xde00,0xe000 and 0xf000
+# following 3 4KB sectors are loaded at 0xd000,0xe000 and 0xf000
 # CP/M starts at DF00, so we need to pad to a 4K bounday (D000)
 # which is 3840 bytes 
 system_track = boot_image + (chr(0) * 3840) +  mem_image

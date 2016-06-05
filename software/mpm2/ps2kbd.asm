@@ -1,3 +1,11 @@
+;----------------------------------------------------------------------------------
+;--+ RETRO80
+;--+ An 8-Bit Retro Computer running Digital Research MP/M II and CP/M. 
+;--+ Based on Will Sowerbutts  SOCZ80 Project:
+;--+ http://sowerbutts.com/
+;--+ RETRO80 extensions (c) 2015-2016 by Thomas Hornschuh
+;--+ This project is licensed under the GPLV3: https://www.gnu.org/licenses/gpl-3.0.txt
+
 ; PS2 Keyboard decoder
 ; (c) 2016 Thomas Hornschuh
 

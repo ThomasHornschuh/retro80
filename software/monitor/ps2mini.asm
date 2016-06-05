@@ -1,3 +1,11 @@
+;----------------------------------------------------------------------------------
+;--+ RETRO80
+;--+ An 8-Bit Retro Computer running Digital Research MP/M II and CP/M. 
+;--+ Based on Will Sowerbutts  SOCZ80 Project:
+;--+ http://sowerbutts.com/
+;--+ RETRO80 extensions (c) 2015-2016 by Thomas Hornschuh
+;--+ This project is licensed under the GPLV3: https://www.gnu.org/licenses/gpl-3.0.txt
+
 ;  Minimal PS2 Keyboard decoder
 ; (c) 2016 Thomas Hornschuh
 
@@ -39,7 +47,8 @@ DEBUG equ 0
 
 
     
-ps2start:   in a,(PS2_DATA) ; clear  ps/2 controller   
+ps2start:   ld a, 01000000B ; PS/2 Controller reset (clears FIFO and pending IRQs) 
+            out (PS2_CONTROL),a 
             ld (ix+mstate),sstart
             ld a,0             
             ld (ix+lockFlags),a

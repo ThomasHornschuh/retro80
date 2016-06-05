@@ -3,6 +3,16 @@
 ; use zmac --rel to assemble this, then use link-80 under CP/M 2.2 to produce a .SPR file
 ;   LINK RESXIOS [OS]
 
+;----------------------------------------------------------------------------------
+;--+ RETRO80
+;--+ An 8-Bit Retro Computer running Digital Research MP/M II and CP/M. 
+;--+ Based on Will Sowerbutts  SOCZ80 Project:
+;--+ http://sowerbutts.com/
+;--+ RETRO80 extensions (c) 2015-2016 by Thomas Hornschuh
+;--+ This project is licensed under the GPLV3: https://www.gnu.org/licenses/gpl-3.0.txt
+
+
+
 ; handy cmdline for testing cycle: ./build && ( echo "rboot 200"; sleep 0.1; ~/projects/socz80/software/cpm2.2/receive/sendmany ./zout/resxios.rel ; sleep 0.1; echo "link resxios [os]"; sleep 0.2; echo "era bnkxios.spr"; sleep 0.1; echo "ren bnkxios.spr=resxios.spr"; sleep 0.1; echo "gensys \$a" ; sleep 0.5; echo "mpmldr" ) > /dev/ttyUSB1
 
     public commonbase
@@ -13,14 +23,20 @@ startlabel: ; important that this assembles to offset 0 (or the linker will add 
 
 ; Conditional defines 
 
-Q_INPUT       equ 0 ;   Queued input for UART0 
-CONINSWITCH   equ 1 ;   Enable  Console switch funktion for UART0  
+Q_INPUT       equ 0 ;   Queued input for UART0 - not supported anymore - must be 0 !!!
+;CONINSWITCH   equ 1 ;   Enable  Console switch funktion for UART0  
 CONFPS2       equ 1 ;   PS/2 Keyboard support
+CONFUART1     equ 0 ;   Enable UART1 
 L_GERMAN      equ 1 ;   German Layout  
 MMU_SECTION   equ 1 ;   Enable MMU critical section handling 
 MPM           equ 1 ;   we are MP/M   
 DISKDEBUG     equ 0 ; 
 
+if CONFUART1
+  nconsoles   equ 3           ; number of consoles we support
+else 
+  nconsoles   equ 2
+endif   
 
 if MMU_SECTION 
 
@@ -76,6 +92,9 @@ TIMCMD_SEL_DOWNRESET    equ 0x13
 PS2_CONTROL              equ 040H ; PS2 Control and status Port
 PS2_DATA                 equ 041H ; PS2 Data Port 
 
+
+VECTOR_LENGTH           equ 64    ; Number of bytes to copy in page 0 to every bank  
+
 ; XDOS function numbers
 xdos_terminate equ 0
 xdos_poll      equ 131
@@ -84,17 +103,20 @@ xdos_flag_set  equ 133
 
 ; device numbers (come back, enum, all is forgiven!)
 ; it seems we can use any numbers/mapping we like here
+; TH: Sort them by UART....
 poll_uart0out  equ 0
-poll_uart1out  equ 1
-poll_uart0in   equ 2
+poll_uart0in   equ 1
+poll_uart1out  equ 2
 poll_uart1in   equ 3
 
 ; flag numbers (1, 2 are already taken by the os)
 ; documentation recommends using interrupts for input only
+; TH: Sort them by UART....
 flag_uart0in   equ 6
-flag_uart1in   equ 7
-flag_uart0out  equ 8
+flag_uart0out  equ 7
+flag_uart1in   equ 8
 flag_uart1out  equ 9
+
 flag_ps2       equ 10 ; TH PS2 Data ready flag 
 
             ; BIOS vectors (largely CP/M compatible)
@@ -127,10 +149,19 @@ flag_ps2       equ 10 ; TH PS2 Data ready flag
             ; db 0, 0, 0      ; uncomment this if mp/m should poll devices when idling
             jp idle         ; custom idle procedure (optional)
 
+
+          
+            
+            
             include bnkproc.asm ; XIOS Background processes running in banked memory 
             include banked.asm ; Banked parts of the XIOS... 
   
-
+; Init Message in banked memory             
+initmsg:    db 13, 10
+initmsg1:   db  "Welcome to RETRO80 by Thomas Hornschuh",13,10 
+            db  "Based on Will Sowerbutts  SOCZ80 Project, http://sowerbutts.com/",13,10 
+            db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20160604,vga,ps2])", 0 ; MP/M print a CRLF for us  
+  
 bankedsize  equ $-startlabel  
            
             ds 256- (bankedsize mod 256) ; padding to page boundary
@@ -153,7 +184,7 @@ sysdat:     dw $-$          ; value computed by GENSYS.COM; address of system da
 
         
 ndisks      equ 3           ; number of disks we defined
-nconsoles   equ 2           ; number of consoles we support
+
 
 ; disk parameter block (can be shared by all disks with same configuration)
 ; my RAM disks are each 2MB in size;
@@ -200,39 +231,55 @@ tbljmp:     add a  ; *2
 ; ---[ console demux ]---------------------------------
 
 const:     
-            call ptbljmp
-        if Q_INPUT
-            dw const0q
-            dw const1q 
-        else
-            dw uart0pollin
-            if CONFPS2
-              dw const1q
-            else  
-              dw uart1pollin
-            endif   
-        endif 
+           call ptbljmp
+            dw const1q  ; Console 
+            dw uart0pollin ; UART 0
+        if CONFUART1
+            dw uart1pollin ; UART 1
+         endif    
+            
+        ; if Q_INPUT
+            ; dw const0q
+            ; dw const1q 
+        ; else
+            ; dw uart0pollin
+            ; if CONFPS2
+              ; dw const1q
+            ; else  
+              ; dw uart1pollin
+            ; endif   
+        ; endif 
            
 
 conin:      
-            call ptbljmp
-        if Q_INPUT  
-            dw conin0q ; Queued input 
-            dw conin1q
-        else
+           call ptbljmp
+            dw conin1q ; Console input Queue 
             dw uart0in
-            if CONFPS2
-              dw conin1q 
-            else   
-              dw uart1in
-            endif   
-        endif       
+        if CONFUART1 
+            dw uart1in
+        endif              
+            
+            
+        ; if Q_INPUT  
+            ; dw conin0q ; Queued input 
+            ; dw conin1q
+        ; else
+            ; dw uart0in
+            ; if CONFPS2
+              ; dw conin1q 
+            ; else   
+              ; dw uart1in
+            ; endif   
+        ; endif       
             
 
 conout:    
-            call ptbljmp
+           call ptbljmp
+            dw vconout
             dw uart0out
-            dw vconout 
+        if CONFUART1
+            dw uart1out         
+        endif      
             
 
 ; ---[ UART status ]--------------------------------
@@ -243,11 +290,13 @@ uart0pollin:
             jr z, notready
             jr ready
 
+if CONFUART1            
 uart1pollin:
             in a, (UART1_STATUS)
             bit 7, a
             jr z, notready
             jr ready
+endif
 
 uart0pollout:
             in a, (UART0_STATUS)
@@ -255,12 +304,13 @@ uart0pollout:
             jr nz, notready
             jr ready
 
+if  CONFUART1                
 uart1pollout:
             in a, (UART1_STATUS)
             bit 6, a
             jr nz, notready
             jr ready
-
+endif 
 notready:   xor a
             ret
 ready:      ld a, 0xff
@@ -268,7 +318,7 @@ ready:      ld a, 0xff
 
 ; ---[ UART read ]----------------------------------
 
-if Q_INPUT = 0 
+
 uart0in:    call uart0pollin
             or a ; test result
             jr nz, uart0read
@@ -283,9 +333,9 @@ uart0in:    call uart0pollin
             jr uart0in
 uart0read:  in a, (UART0_DATA)
             jr input_fixup
-endif           
+          
 
-if CONFPS2 = 0 
+if CONFUART1
 uart1in:    call uart1pollin
             or a ; test result
             jr nz, uart1read
@@ -328,7 +378,7 @@ uart0write: ld a, c
             out (UART0_DATA), a ; transmit character
             ret
 
-if CONFPS2 = 0 
+if CONFUART1
 uart1out:   call uart1pollout
             or a ; test result
             jr nz, uart1write
@@ -678,9 +728,11 @@ polldevice: ; poll device - device number is in C register
             jp returnzero    ; bad device? return zero.
 deviceok:   call tbljmp      ; perform table lookup
 tblstart:   dw uart0pollout  ; device number 0: poll_uart0out
-            dw uart1pollout  ; device number 1: poll_uart1out
-            dw uart0pollin   ; device number 2: poll_uart0in
+            dw uart0pollin   ; device number 1: poll_uart0in
+   if CONFUART1           
+            dw uart1pollout  ; device number 2: poll_uart1out           
             dw uart1pollin   ; device number 3: poll_uart1in
+   endif          
 numdevices  equ ($-tblstart)/2 ; compute table size used in range check above
 
 ; ---[ initialisation common part  ]-----------------------------
@@ -796,7 +848,7 @@ uart0tx:    ; test transmit bit
             call xdos
 uart0done:
         
-
+if CONFUART1
             ; test UART1
             in a, (UART1_STATUS)
             ld b, a
@@ -825,6 +877,8 @@ uart1tx:    ; test transmit bit
             ld e, flag_uart1out
             call xdos
 uart1done:
+endif
+
     if CONFPS2
            in a,(PS2_CONTROL)
            and 01H ; Check PS2 Status bit 
@@ -877,19 +931,7 @@ endif
     
 mmuPanic:  db ' MMU hazard',0;                
                 
-;---------------------------------------------------------------------------------------------------------------
-; this string must be AT LEAST 64 bytes since we use it as a copy buffer inside systeminit, and
-; then used again as the stack during interrupts
-sysvectors:  
-initmsg:    db 13, 10
-initmsg1:   db  "Z80 MP/M-II Banked XIOS (Will Sowerbutts, [TH 20160424,vga,ps2])", 0 ; MP/M print a CRLF for us
-          if ($ - sysvectors) < VECTOR_LENGTH
-            ds (VECTOR_LENGTH - ($ - sysvectors))  ; fill up to 64 Bytes if needed 
-          endif   
 
-            .assert ($-sysvectors >= VECTOR_LENGTH) ; safety check
-interrupt_stack:
-saved_stackptr: dw 0
 
 ;---------------------------------------------------------------------------------------------------------------
 ; debug functions (ideally to be removed in final version, if we ever get that far!)
@@ -1035,6 +1077,16 @@ mmuSema:    db 0
 mmuOwner:   db 0 
 
 
+
+;64 Byte Buffer dubbing as interrupt stack and as copy buffer
+;at system initalisation for copying the first 64 byte of memory
+;from bank 0 to all other banks. 
+
+sysvectors:
+           ds VECTOR_LENGTH           
+interrupt_stack:  ; Top of Interrupt stack 
+
+saved_stackptr: dw 0
 
 
 ; scratch RAM used by BDOS/MPMLDR

@@ -1,22 +1,22 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
+--+ RETRO80
+--+ An 8-Bit Retro Computer running Digital Research MP/M II and CP/M. 
+--+ Based on Will Sowerbutts  SOCZ80 Project:
+--+ http://sowerbutts.com/
+--+ RETRO80 extensions (c) 2015-2016 by Thomas Hornschuh
+--+ This project is licensed under the GPLV3: https://www.gnu.org/licenses/gpl-3.0.txt
+
+
+
 -- Create Date:    00:49:30 12/21/2015 
 -- Design Name: 
 -- Module Name:    vgatop - Behavioral 
--- Project Name: 
--- Target Devices: 
--- Tool versions: 
--- Description: 
---
--- Dependencies: 
---
--- Revision: 
--- Revision 0.01 - File Created
--- Additional Comments: 
---
-
+-- VGA Module is based on http://opencores.org/project,interface_vga80x40
+-- interfacevga80x40 is licensed under LGPL 
+-- IO:
+--   xxxxxxx00 : Cursor X register 1..80
+--   xxxxxxx01 : Cursor Y register 0..39
+--   xxxxxxx11 : Control Register:      
 
 -- Control register. Individual control signal
 --  cur_mode  <= octl(4); 
@@ -27,6 +27,7 @@
 --  ctl_g     <= octl(1);
 --  ctl_b     <= octl(0);
 
+-- Memory: 4KB Page of Video Memory 
 
 ----------------------------------------------------------------------------------
 library IEEE;
@@ -160,20 +161,7 @@ END COMPONENT;
 
 begin
 
---  Pixel Clock generator
---  pixelClock : clk25Mhz
---  port map
---   (-- Clock in ports
---    CLK_IN1 => clk32Mhz,
---    -- Clock out ports
---    CLK_OUT1 => clk25);
-	 
---pixelClock : clk25pll
---  port map
---   (-- Clock in ports
---    Clk32Mhz => clk32Mhz,
---    -- Clock out ports
---    Clk25Mhz => clk25);	 
+
 	 
 	 
  fontMem : fontrom

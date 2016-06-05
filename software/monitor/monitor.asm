@@ -1473,7 +1473,7 @@ greeting:           db 13
                     db "/ __|/ _ \ / __|_  / _ \| | | |",13,10
                     db "\__ \ (_) | (__ / / (_) | |_| |",13,10
                     db "|___/\___/ \___/___\___/ \___/ ",13,10
-                    db "Z80 ROM Monitor (Will Sowerbutts, 2013-12-12)",13,10, 0
+                    db "Z80 ROM Monitor (Will Sowerbutts, Thomas Hornschuh, 2016-05-21)",13,10, 0
 endif 
 
 monitor_prompt:     db "Z80>", 0
