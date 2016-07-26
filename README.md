@@ -43,13 +43,13 @@ When you want to use the VGA PS/2 you need in addtion:
 
 
 
-The "Serialboot" [https://bitbucket.org/thornschuh/retro80/downloads/retro80Serialboot20160604.bit](Link URL)  bitfile contains the orginal ROM Monitor from Will which interacts with the serial console (**the baud rate is 115200 bit/sec fixed)**. The video RAM is initalized with a test pattern (with initalizing the Block RAM by VHDL code), so it is easy to check if VGA is working.
+The "Serialboot" https://bitbucket.org/thornschuh/retro80/downloads/retro80Serialboot20160604.bit  bitfile contains the orginal ROM Monitor from Will which interacts with the serial console (**the baud rate is 115200 bit/sec fixed)**. The video RAM is initalized with a test pattern (with initalizing the Block RAM by VHDL code), so it is easy to check if VGA is working.
 
 
 
-The "consoleboot" [https://bitbucket.org/thornschuh/retro80/downloads/retro80consoleboot20160620.bit](Link URL) bitfile contains a ROM Monitor which uses the VGA Port and the PS/2 "A" port of the arcade megawing as conole. Unfortunately the keyboard layout is german at the moment...
+The "consoleboot" https://bitbucket.org/thornschuh/retro80/downloads/retro80consoleboot20160620.bit bitfile contains a ROM Monitor which uses the VGA Port and the PS/2 "A" port of the arcade megawing as conole. Unfortunately the keyboard layout is german at the moment...
 
-Having a boot image  [https://bitbucket.org/thornschuh/retro80/downloads/retro80_200.image](Link URL)  is much more usefull. To get the boot image onto the system you can either use the method described in Wills readme.txt, or as fast alternative merge it at address 0x200000 to the bitfile and upload it.
+Having a boot image https://bitbucket.org/thornschuh/retro80/downloads/retro80_200.image  is much more usefull. To get the boot image onto the system you can either use the method described in Wills readme.txt, or as fast alternative merge it at address 0x200000 to the bitfile and upload it.
 
 For merging bitfiles there are different tools, I used papillo-prog.
 
