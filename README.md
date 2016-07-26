@@ -1,8 +1,8 @@
 # RETRO80 - A retro Microcomputer running on Papillio Pro FPGA Board #
 
-This project is based on the work of [http://sowerbutts.com/socz80/](Link URL). First I will say, that Will's  has done the "hard" part of the work, my addtions are quite small. 
+This project is based on the work of http://sowerbutts.com/socz80/ First I will say, that Will's  has done the "hard" part of the work, my addtions are quite small. 
 
-For operation of the whole system, especially how to use the Monitor please refer to Wills excelent readme.txt : [http://sowerbutts.com/socz80/README.txt](Link URL)
+For operation of the whole system, especially how to use the Monitor please refer to Wills excelent readme.txt :http://sowerbutts.com/socz80/README.txt
 
 ## Features added by me  ##
 
